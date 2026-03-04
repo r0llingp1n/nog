@@ -2,7 +2,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
 use crate::git::diff::DiffData;
 use crate::git::types::CommitInfo;
@@ -98,7 +98,6 @@ impl<'a> Widget for CommitDetail<'a> {
 
         let paragraph = Paragraph::new(lines)
             .block(block)
-            .wrap(Wrap { trim: false })
             .scroll((self.scroll, 0));
 
         paragraph.render(area, buf);

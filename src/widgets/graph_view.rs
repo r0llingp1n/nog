@@ -186,7 +186,19 @@ impl<'a> StatefulWidget for GraphView<'a> {
 
             let y = area.y + screen_row as u16;
 
-            // Render the line into the buffer
+            let bg_style = if is_selected {
+                Style::default().bg(theme::SELECTED_BG)
+            } else {
+                Style::default()
+            };
+
+            // Clear the entire row first
+            for cx in area.x..area.x + area.width {
+                buf.cell_mut((cx, y))
+                    .map(|cell| cell.set_char(' ').set_style(bg_style));
+            }
+
+            // Render the line spans
             let mut x = area.x;
             for span in line.spans.iter() {
                 let style = if is_selected {
@@ -194,23 +206,17 @@ impl<'a> StatefulWidget for GraphView<'a> {
                 } else {
                     span.style
                 };
-                let content = &span.content;
-                for ch in content.chars() {
+                for ch in span.content.chars() {
                     if x >= area.x + area.width {
                         break;
                     }
+                    let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
                     buf.cell_mut((x, y))
                         .map(|cell| cell.set_char(ch).set_style(style));
-                    x += 1;
+                    x += w as u16;
                 }
-            }
-
-            // Fill remaining width with selected bg if selected
-            if is_selected {
-                while x < area.x + area.width {
-                    buf.cell_mut((x, y))
-                        .map(|cell| cell.set_style(Style::default().bg(theme::SELECTED_BG)));
-                    x += 1;
+                if x >= area.x + area.width {
+                    break;
                 }
             }
         }
