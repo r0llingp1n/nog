@@ -31,6 +31,95 @@ pub struct GraphView<'a> {
     pub commits: &'a [CommitInfo],
     pub graph_rows: &'a [GraphRow],
     pub decorations: &'a HashMap<Oid, Decorations>,
+    pub show_remotes: bool,
+}
+
+impl<'a> GraphView<'a> {
+    /// Get the display label for a commit's refs (branches + tags).
+    fn ref_label(&self, oid: &Oid) -> Option<(String, ratatui::style::Color)> {
+        let d = self.decorations.get(oid)?;
+
+        // Pick the most important ref to display: HEAD branch > local branch > remote > tag
+        for branch in &d.branches {
+            if branch.is_head {
+                return Some((
+                    format!("HEAD -> {}", branch.name),
+                    ratatui::style::Color::Green,
+                ));
+            }
+        }
+        for branch in &d.branches {
+            if !branch.is_remote {
+                return Some((branch.name.clone(), ratatui::style::Color::Green));
+            }
+        }
+        if self.show_remotes {
+            for branch in &d.branches {
+                if branch.is_remote {
+                    return Some((branch.name.clone(), ratatui::style::Color::Red));
+                }
+            }
+        }
+        for tag in &d.tags {
+            return Some((tag.name.clone(), ratatui::style::Color::Yellow));
+        }
+
+        None
+    }
+
+    /// Get all ref labels for a commit (for the extra labels after the primary one).
+    fn extra_ref_labels(&self, oid: &Oid) -> Vec<(String, ratatui::style::Color)> {
+        let d = match self.decorations.get(oid) {
+            Some(d) => d,
+            None => return Vec::new(),
+        };
+
+        let mut labels = Vec::new();
+        let mut first_skipped = false;
+
+        // Same priority order as ref_label — skip the first match
+        for branch in &d.branches {
+            if branch.is_head {
+                if !first_skipped {
+                    first_skipped = true;
+                    continue;
+                }
+                labels.push((
+                    format!("HEAD -> {}", branch.name),
+                    ratatui::style::Color::Green,
+                ));
+            }
+        }
+        for branch in &d.branches {
+            if !branch.is_remote && !branch.is_head {
+                if !first_skipped {
+                    first_skipped = true;
+                    continue;
+                }
+                labels.push((branch.name.clone(), ratatui::style::Color::Green));
+            }
+        }
+        if self.show_remotes {
+            for branch in &d.branches {
+                if branch.is_remote {
+                    if !first_skipped {
+                        first_skipped = true;
+                        continue;
+                    }
+                    labels.push((branch.name.clone(), ratatui::style::Color::Red));
+                }
+            }
+        }
+        for tag in &d.tags {
+            if !first_skipped {
+                first_skipped = true;
+                continue;
+            }
+            labels.push((tag.name.clone(), ratatui::style::Color::Yellow));
+        }
+
+        labels
+    }
 }
 
 impl<'a> StatefulWidget for GraphView<'a> {
@@ -50,27 +139,50 @@ impl<'a> StatefulWidget for GraphView<'a> {
             state.offset = state.selected - height + 1;
         }
 
+        let visible_start = state.offset;
+        let visible_end = (state.offset + height).min(self.commits.len());
+
         // Find max graph width for alignment
         let max_cols = self
             .graph_rows
             .iter()
-            .skip(state.offset)
+            .skip(visible_start)
             .take(height)
             .map(|r| r.num_cols)
             .max()
             .unwrap_or(1);
         let graph_width = max_cols * 2;
 
-        for (screen_row, idx) in (state.offset..state.offset + height).enumerate() {
-            if idx >= self.commits.len() {
-                break;
-            }
+        // Find max ref label width across visible rows for alignment
+        let max_ref_width = (visible_start..visible_end)
+            .filter_map(|i| {
+                self.ref_label(&self.commits[i].oid)
+                    .map(|(label, _)| label.len())
+            })
+            .max()
+            .unwrap_or(0);
 
+        // ref column width: label + connecting chars "── label ─"
+        // 0 if no refs visible
+        let ref_col_width = if max_ref_width > 0 {
+            max_ref_width + 4 // "── " + label + " "
+        } else {
+            0
+        };
+
+        for (screen_row, idx) in (visible_start..visible_end).enumerate() {
             let commit = &self.commits[idx];
             let graph_row = &self.graph_rows[idx];
             let is_selected = idx == state.selected;
 
-            let line = self.render_row(commit, graph_row, graph_width, area.width as usize);
+            let line = self.render_row(
+                commit,
+                graph_row,
+                graph_width,
+                ref_col_width,
+                max_ref_width,
+                area.width as usize,
+            );
 
             let y = area.y + screen_row as u16;
 
@@ -111,13 +223,16 @@ impl<'a> GraphView<'a> {
         commit: &CommitInfo,
         graph_row: &GraphRow,
         graph_width: usize,
+        ref_col_width: usize,
+        max_ref_width: usize,
         total_width: usize,
     ) -> Line<'static> {
         let mut spans: Vec<Span<'static>> = Vec::new();
 
         // Build a set of merge/fork target columns for horizontal line drawing
         let mut merge_cols: std::collections::HashSet<usize> = std::collections::HashSet::new();
-        let mut merge_color_map: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        let mut merge_color_map: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
         for &(col, color) in &graph_row.merge_from {
             merge_cols.insert(col);
             merge_color_map.insert(col, color);
@@ -127,7 +242,6 @@ impl<'a> GraphView<'a> {
             merge_color_map.insert(col, color);
         }
 
-        // Determine the range of merge lines
         let merge_min = merge_cols.iter().copied().min();
         let merge_max = merge_cols.iter().copied().max();
         let has_merge = !merge_cols.is_empty();
@@ -136,13 +250,13 @@ impl<'a> GraphView<'a> {
         let mut graph_chars = 0;
         for col in 0..graph_row.num_cols {
             if col == graph_row.commit_col {
-                // Commit node
                 spans.push(Span::styled(
                     glyphs::COMMIT_NODE.to_string(),
                     Style::default().fg(theme::graph_color(graph_row.commit_color)),
                 ));
-                // Draw horizontal line toward merge columns if needed
-                let needs_line = has_merge && merge_min.is_some() && merge_max.is_some()
+                let needs_line = has_merge
+                    && merge_min.is_some()
+                    && merge_max.is_some()
                     && ((col < merge_max.unwrap() && col >= graph_row.commit_col)
                         || (col > merge_min.unwrap() && col <= graph_row.commit_col));
                 if needs_line {
@@ -154,33 +268,25 @@ impl<'a> GraphView<'a> {
                     spans.push(Span::raw(" ".to_string()));
                 }
             } else if merge_cols.contains(&col) {
-                // Merge/fork endpoint
                 let color = merge_color_map[&col];
-                if let Some(Some(_active_color)) = graph_row.active_cols.get(col) {
-                    // Column has a pass-through AND is a merge target
-                    spans.push(Span::styled(
-                        glyphs::VERTICAL.to_string(),
-                        Style::default().fg(theme::graph_color(color)),
-                    ));
-                } else {
-                    spans.push(Span::styled(
-                        glyphs::VERTICAL.to_string(),
-                        Style::default().fg(theme::graph_color(color)),
-                    ));
-                }
+                spans.push(Span::styled(
+                    glyphs::VERTICAL.to_string(),
+                    Style::default().fg(theme::graph_color(color)),
+                ));
                 spans.push(Span::raw(" ".to_string()));
             } else if let Some(Some(color_idx)) = graph_row.active_cols.get(col) {
-                // Pass-through pipe
                 spans.push(Span::styled(
                     glyphs::VERTICAL.to_string(),
                     Style::default().fg(theme::graph_color(*color_idx)),
                 ));
-                // Draw horizontal merge line through if this column is between commit and merge target
-                let between_merge = has_merge && merge_min.is_some() && merge_max.is_some() && {
-                    let lo = graph_row.commit_col.min(merge_min.unwrap());
-                    let hi = graph_row.commit_col.max(merge_max.unwrap());
-                    col > lo && col < hi
-                };
+                let between_merge = has_merge
+                    && merge_min.is_some()
+                    && merge_max.is_some()
+                    && {
+                        let lo = graph_row.commit_col.min(merge_min.unwrap());
+                        let hi = graph_row.commit_col.max(merge_max.unwrap());
+                        col > lo && col < hi
+                    };
                 if between_merge {
                     spans.push(Span::styled(
                         "─".to_string(),
@@ -190,12 +296,14 @@ impl<'a> GraphView<'a> {
                     spans.push(Span::raw(" ".to_string()));
                 }
             } else {
-                // Empty column — but may need horizontal merge line through it
-                let between_merge = has_merge && merge_min.is_some() && merge_max.is_some() && {
-                    let lo = graph_row.commit_col.min(merge_min.unwrap());
-                    let hi = graph_row.commit_col.max(merge_max.unwrap());
-                    col > lo && col < hi
-                };
+                let between_merge = has_merge
+                    && merge_min.is_some()
+                    && merge_max.is_some()
+                    && {
+                        let lo = graph_row.commit_col.min(merge_min.unwrap());
+                        let hi = graph_row.commit_col.max(merge_max.unwrap());
+                        col > lo && col < hi
+                    };
                 if between_merge {
                     spans.push(Span::styled(
                         "──".to_string(),
@@ -213,8 +321,59 @@ impl<'a> GraphView<'a> {
             spans.push(Span::raw(" ".repeat(graph_width - graph_chars)));
         }
 
-        // Separator
-        spans.push(Span::raw(" ".to_string()));
+        // Ref label column with connecting line
+        if ref_col_width > 0 {
+            let primary = self.ref_label(&commit.oid);
+            let extras = self.extra_ref_labels(&commit.oid);
+
+            if let Some((label, color)) = primary {
+                // ── label ──  (padded to fixed width)
+                let commit_color = theme::graph_color(graph_row.commit_color);
+                spans.push(Span::styled(
+                    "──".to_string(),
+                    Style::default().fg(commit_color),
+                ));
+                spans.push(Span::styled(
+                    " ".to_string(),
+                    Style::default(),
+                ));
+                spans.push(Span::styled(
+                    label.clone(),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ));
+
+                // Extra refs inline after primary
+                for (extra_label, extra_color) in &extras {
+                    spans.push(Span::styled(
+                        ", ".to_string(),
+                        Style::default().fg(theme::DATE_COLOR),
+                    ));
+                    spans.push(Span::styled(
+                        extra_label.clone(),
+                        Style::default()
+                            .fg(*extra_color)
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                }
+
+                // Pad remaining ref column
+                let extras_len: usize = extras
+                    .iter()
+                    .map(|(l, _)| l.len() + 2) // ", " + label
+                    .sum();
+                let label_used = label.len() + extras_len;
+                let pad = max_ref_width.saturating_sub(label_used);
+                if pad > 0 {
+                    spans.push(Span::raw(" ".repeat(pad)));
+                }
+                spans.push(Span::raw(" ".to_string()));
+            } else {
+                // No ref — fill with spaces to keep alignment
+                spans.push(Span::raw(" ".repeat(ref_col_width)));
+            }
+        } else {
+            spans.push(Span::raw(" ".to_string()));
+        }
 
         // Short hash
         spans.push(Span::styled(
@@ -223,42 +382,10 @@ impl<'a> GraphView<'a> {
         ));
         spans.push(Span::raw(" ".to_string()));
 
-        // Decorations
-        let decos = self.decorations.get(&commit.oid);
-        if let Some(d) = decos {
-            for branch in &d.branches {
-                if branch.is_remote {
-                    continue; // Skip remote branches in the compact view
-                }
-                let (label, color) = if branch.is_head {
-                    (
-                        format!("HEAD -> {}", branch.name),
-                        ratatui::style::Color::Green,
-                    )
-                } else {
-                    (branch.name.clone(), ratatui::style::Color::Green)
-                };
-                spans.push(Span::styled(
-                    format!("({}) ", label),
-                    Style::default()
-                        .fg(color)
-                        .add_modifier(Modifier::BOLD),
-                ));
-            }
-            for tag in &d.tags {
-                spans.push(Span::styled(
-                    format!("[{}] ", tag.name),
-                    Style::default()
-                        .fg(ratatui::style::Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ));
-            }
-        }
-
         // Summary — truncate to fit
         let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
         let date_str = relative_time(commit.author_date);
-        let date_width = date_str.chars().count() + 2; // 2 for spacing
+        let date_width = date_str.chars().count() + 2;
         let remaining = total_width.saturating_sub(used + date_width);
 
         let summary = if commit.summary.chars().count() > remaining && remaining > 3 {

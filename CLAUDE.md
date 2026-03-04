@@ -37,6 +37,12 @@ cargo run -- /path    # run against specific repo
 
 - `j/k` or `↑/↓` — Navigate commits
 - `Space` — Toggle Quick View (commit detail + diff)
+- `/` — Search forward (type query, Enter to confirm, Esc to cancel)
+- `?` — Search backward
+- `n` — Next match
+- `N` — Previous match
+- `b` — Open branch picker (Enter to checkout, Esc to cancel)
+- `r` — Toggle remote branch tips
 - `g/G` — Jump to first/last commit
 - `Ctrl+d/u` — Page down/up
 - `q/Esc` — Quit (or close Quick View)

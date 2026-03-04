@@ -10,3 +10,4 @@ git2 = "0.19"
 anyhow = "1"
 unicode-width = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
