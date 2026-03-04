@@ -68,6 +68,8 @@ Or, after building a release binary:
 | Key               | Action               |
 |-------------------|----------------------|
 | Space             | Toggle Quick View    |
+| c                 | Open commit window   |
+| s                 | Open stash view      |
 | r                 | Toggle remote refs   |
 | b                 | Open branch picker   |
 

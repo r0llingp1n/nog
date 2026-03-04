@@ -41,6 +41,8 @@ cargo run -- /path    # run against specific repo
 - `?` — Search backward
 - `n` — Next match
 - `N` — Previous match
+- `c` — Open commit window (stage/unstage files, write message, commit)
+- `s` — Open stash view (browse stash stack, view files, apply/pop/drop)
 - `b` — Open branch picker (Enter to checkout, Esc to cancel)
 - `r` — Toggle remote branch tips
 - `g/G` — Jump to first/last commit
