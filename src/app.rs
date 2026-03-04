@@ -8,6 +8,8 @@ use git2::Oid;
 use crate::git::diff::{self, DiffData};
 use crate::git::log;
 use crate::git::repo;
+use crate::git::stash::{self, StashEntry};
+use crate::git::status::{self, FileStatus};
 use crate::git::types::{CommitInfo, Decorations};
 use crate::graph::layout;
 use crate::graph::types::GraphRow;
@@ -23,6 +25,23 @@ pub enum AppMode {
     BranchPicker,
     StashPrompt,
     Search,
+    CommitView,
+    StashView,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum CommitFocus {
+    UnstagedFiles,
+    StagedFiles,
+    MessageEditor,
+    DiffPreview,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum StashViewFocus {
+    StashList,
+    FileList,
+    DiffPreview,
 }
 
 #[allow(dead_code)]
@@ -56,6 +75,30 @@ pub struct App {
     pub stash_input: String,
     pub stash_target_branch: Option<String>,
     pub stash_error: Option<String>,
+
+    // Commit view state
+    pub commit_focus: CommitFocus,
+    pub commit_unstaged: Vec<FileStatus>,
+    pub commit_staged: Vec<FileStatus>,
+    pub commit_unstaged_selected: usize,
+    pub commit_staged_selected: usize,
+    pub commit_message: String,
+    pub commit_error: Option<String>,
+    pub commit_diff: Option<DiffData>,
+    pub commit_diff_scroll: u16,
+    pub commit_diff_path: String,
+    pub commit_diff_from: CommitFocus,
+
+    // Stash view state
+    pub stash_entries: Vec<StashEntry>,
+    pub stash_view_focus: StashViewFocus,
+    pub stash_selected: usize,
+    pub stash_files: Vec<FileStatus>,
+    pub stash_file_selected: usize,
+    pub stash_diff: Option<DiffData>,
+    pub stash_diff_scroll: u16,
+    pub stash_diff_path: String,
+    pub stash_view_error: Option<String>,
 
     // Search state
     pub search_input: String,
@@ -104,6 +147,26 @@ impl App {
             stash_input: String::new(),
             stash_target_branch: None,
             stash_error: None,
+            commit_focus: CommitFocus::UnstagedFiles,
+            commit_unstaged: Vec::new(),
+            commit_staged: Vec::new(),
+            commit_unstaged_selected: 0,
+            commit_staged_selected: 0,
+            commit_message: String::new(),
+            commit_error: None,
+            commit_diff: None,
+            commit_diff_scroll: 0,
+            commit_diff_path: String::new(),
+            commit_diff_from: CommitFocus::UnstagedFiles,
+            stash_entries: Vec::new(),
+            stash_view_focus: StashViewFocus::StashList,
+            stash_selected: 0,
+            stash_files: Vec::new(),
+            stash_file_selected: 0,
+            stash_diff: None,
+            stash_diff_scroll: 0,
+            stash_diff_path: String::new(),
+            stash_view_error: None,
             search_input: String::new(),
             search_pattern: None,
             search_matches: Vec::new(),
@@ -137,6 +200,8 @@ impl App {
             AppMode::BranchPicker => self.handle_branch_picker_key(key),
             AppMode::StashPrompt => self.handle_stash_prompt_key(key),
             AppMode::Search => self.handle_search_key(key),
+            AppMode::CommitView => self.handle_commit_view_key(key),
+            AppMode::StashView => self.handle_stash_view_key(key),
         }
     }
 
@@ -191,6 +256,12 @@ impl App {
             }
             KeyCode::Char('N') => {
                 self.search_prev();
+            }
+            KeyCode::Char('c') => {
+                self.open_commit_view();
+            }
+            KeyCode::Char('s') => {
+                self.open_stash_view();
             }
             _ => {}
         }
@@ -523,6 +594,569 @@ impl App {
         };
         self.search_match_idx = Some(prev);
         self.graph_state.selected = self.search_matches[prev];
+    }
+
+    fn open_commit_view(&mut self) {
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            match status::get_status(&repo) {
+                Ok((unstaged, staged)) => {
+                    self.commit_unstaged = unstaged;
+                    self.commit_staged = staged;
+                    self.commit_unstaged_selected = 0;
+                    self.commit_staged_selected = 0;
+                    self.commit_message.clear();
+                    self.commit_error = None;
+                    self.commit_focus = CommitFocus::UnstagedFiles;
+                    self.mode = AppMode::CommitView;
+                }
+                Err(e) => {
+                    self.commit_error = Some(format!("Failed to load status: {}", e));
+                }
+            }
+        }
+    }
+
+    fn handle_commit_view_key(&mut self, key: KeyEvent) {
+        // Diff preview handles its own keys exclusively
+        if self.commit_focus == CommitFocus::DiffPreview {
+            self.handle_commit_diff_key(key);
+            return;
+        }
+
+        // Universal keys
+        match key.code {
+            KeyCode::Tab => {
+                self.commit_focus = match self.commit_focus {
+                    CommitFocus::UnstagedFiles => CommitFocus::StagedFiles,
+                    CommitFocus::StagedFiles => CommitFocus::MessageEditor,
+                    CommitFocus::MessageEditor => CommitFocus::UnstagedFiles,
+                    CommitFocus::DiffPreview => unreachable!(),
+                };
+                return;
+            }
+            KeyCode::BackTab => {
+                self.commit_focus = match self.commit_focus {
+                    CommitFocus::UnstagedFiles => CommitFocus::MessageEditor,
+                    CommitFocus::StagedFiles => CommitFocus::UnstagedFiles,
+                    CommitFocus::MessageEditor => CommitFocus::StagedFiles,
+                    CommitFocus::DiffPreview => unreachable!(),
+                };
+                return;
+            }
+            _ => {}
+        }
+
+        match self.commit_focus {
+            CommitFocus::UnstagedFiles => self.handle_commit_unstaged_key(key),
+            CommitFocus::StagedFiles => self.handle_commit_staged_key(key),
+            CommitFocus::MessageEditor => self.handle_commit_message_key(key),
+            CommitFocus::DiffPreview => unreachable!(),
+        }
+    }
+
+    fn handle_commit_unstaged_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.mode = AppMode::GraphView;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if !self.commit_unstaged.is_empty()
+                    && self.commit_unstaged_selected + 1 < self.commit_unstaged.len()
+                {
+                    self.commit_unstaged_selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.commit_unstaged_selected = self.commit_unstaged_selected.saturating_sub(1);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.commit_unstaged_selected = 0;
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if !self.commit_unstaged.is_empty() {
+                    self.commit_unstaged_selected = self.commit_unstaged.len() - 1;
+                }
+            }
+            KeyCode::Char('s') => {
+                self.stage_selected_file();
+            }
+            KeyCode::Char(' ') => {
+                self.open_commit_diff(false);
+            }
+            KeyCode::Char('a') => {
+                self.stage_all_files();
+            }
+            KeyCode::Char('c') => {
+                self.perform_commit();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_commit_staged_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.mode = AppMode::GraphView;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if !self.commit_staged.is_empty()
+                    && self.commit_staged_selected + 1 < self.commit_staged.len()
+                {
+                    self.commit_staged_selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.commit_staged_selected = self.commit_staged_selected.saturating_sub(1);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.commit_staged_selected = 0;
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if !self.commit_staged.is_empty() {
+                    self.commit_staged_selected = self.commit_staged.len() - 1;
+                }
+            }
+            KeyCode::Char('u') => {
+                self.unstage_selected_file();
+            }
+            KeyCode::Char(' ') => {
+                self.open_commit_diff(true);
+            }
+            KeyCode::Char('a') => {
+                self.unstage_all_files();
+            }
+            KeyCode::Char('c') => {
+                self.perform_commit();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_commit_message_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.commit_focus = CommitFocus::StagedFiles;
+            }
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.perform_commit();
+            }
+            KeyCode::Enter => {
+                self.commit_message.push('\n');
+            }
+            KeyCode::Backspace => {
+                self.commit_message.pop();
+            }
+            KeyCode::Char(c) => {
+                self.commit_message.push(c);
+            }
+            _ => {}
+        }
+    }
+
+    fn open_commit_diff(&mut self, staged: bool) {
+        let (files, selected) = if staged {
+            (&self.commit_staged, self.commit_staged_selected)
+        } else {
+            (&self.commit_unstaged, self.commit_unstaged_selected)
+        };
+        let path = match files.get(selected) {
+            Some(f) => f.path.clone(),
+            None => return,
+        };
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            match diff::diff_workdir_file(&repo, &path, staged) {
+                Ok(data) => {
+                    self.commit_diff_from = self.commit_focus;
+                    self.commit_diff = Some(data);
+                    self.commit_diff_scroll = 0;
+                    self.commit_diff_path = path;
+                    self.commit_focus = CommitFocus::DiffPreview;
+                }
+                Err(e) => {
+                    self.commit_error = Some(format!("Diff failed: {}", e));
+                }
+            }
+        }
+    }
+
+    fn handle_commit_diff_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char(' ') => {
+                self.commit_focus = self.commit_diff_from;
+                self.commit_diff = None;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.commit_diff_scroll = self.commit_diff_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.commit_diff_scroll = self.commit_diff_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.commit_diff_scroll = self.commit_diff_scroll.saturating_add(20);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.commit_diff_scroll = self.commit_diff_scroll.saturating_sub(20);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.commit_diff_scroll = 0;
+            }
+            _ => {}
+        }
+    }
+
+    fn stage_selected_file(&mut self) {
+        let path = match self.commit_unstaged.get(self.commit_unstaged_selected) {
+            Some(f) => f.path.clone(),
+            None => return,
+        };
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = status::stage_file(&repo, &path) {
+                self.commit_error = Some(format!("Stage failed: {}", e));
+                return;
+            }
+        }
+        self.refresh_commit_status();
+        // If unstaged is now empty, move focus to staged
+        if self.commit_unstaged.is_empty() {
+            self.commit_focus = CommitFocus::StagedFiles;
+        }
+    }
+
+    fn unstage_selected_file(&mut self) {
+        let path = match self.commit_staged.get(self.commit_staged_selected) {
+            Some(f) => f.path.clone(),
+            None => return,
+        };
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = status::unstage_file(&repo, &path) {
+                self.commit_error = Some(format!("Unstage failed: {}", e));
+                return;
+            }
+        }
+        self.refresh_commit_status();
+        // If staged is now empty, move focus to unstaged
+        if self.commit_staged.is_empty() {
+            self.commit_focus = CommitFocus::UnstagedFiles;
+        }
+    }
+
+    fn stage_all_files(&mut self) {
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = status::stage_all(&repo) {
+                self.commit_error = Some(format!("Stage all failed: {}", e));
+                return;
+            }
+        }
+        self.refresh_commit_status();
+        self.commit_focus = CommitFocus::StagedFiles;
+    }
+
+    fn unstage_all_files(&mut self) {
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = status::unstage_all(&repo) {
+                self.commit_error = Some(format!("Unstage all failed: {}", e));
+                return;
+            }
+        }
+        self.refresh_commit_status();
+        self.commit_focus = CommitFocus::UnstagedFiles;
+    }
+
+    fn perform_commit(&mut self) {
+        if self.commit_staged.is_empty() {
+            self.commit_error = Some("Nothing staged to commit".to_string());
+            return;
+        }
+        let msg = self.commit_message.trim().to_string();
+        if msg.is_empty() {
+            self.commit_error = Some("Commit message cannot be empty".to_string());
+            return;
+        }
+        let result = (|| -> Result<()> {
+            let repo = git2::Repository::open(&self.repo_internal_path)?;
+            status::create_commit(&repo, &msg)?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                self.commit_message.clear();
+                self.commit_error = None;
+                let _ = self.reload();
+                self.mode = AppMode::GraphView;
+            }
+            Err(e) => {
+                self.commit_error = Some(format!("Commit failed: {}", e));
+            }
+        }
+    }
+
+    fn refresh_commit_status(&mut self) {
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Ok((unstaged, staged)) = status::get_status(&repo) {
+                self.commit_unstaged = unstaged;
+                self.commit_staged = staged;
+                if !self.commit_unstaged.is_empty() {
+                    self.commit_unstaged_selected = self
+                        .commit_unstaged_selected
+                        .min(self.commit_unstaged.len() - 1);
+                } else {
+                    self.commit_unstaged_selected = 0;
+                }
+                if !self.commit_staged.is_empty() {
+                    self.commit_staged_selected = self
+                        .commit_staged_selected
+                        .min(self.commit_staged.len() - 1);
+                } else {
+                    self.commit_staged_selected = 0;
+                }
+            }
+        }
+        self.commit_error = None;
+    }
+
+    fn open_stash_view(&mut self) {
+        if let Ok(mut repo) = git2::Repository::open(&self.repo_internal_path) {
+            match stash::list_stashes(&mut repo) {
+                Ok(entries) => {
+                    self.stash_entries = entries;
+                    self.stash_selected = 0;
+                    self.stash_view_focus = StashViewFocus::StashList;
+                    self.stash_view_error = None;
+                    self.stash_diff = None;
+                    self.load_stash_files();
+                    self.mode = AppMode::StashView;
+                }
+                Err(e) => {
+                    self.stash_view_error = Some(format!("Failed to list stashes: {}", e));
+                }
+            }
+        }
+    }
+
+    fn load_stash_files(&mut self) {
+        if let Some(entry) = self.stash_entries.get(self.stash_selected) {
+            let oid = entry.oid;
+            if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+                match stash::stash_files(&repo, oid) {
+                    Ok(files) => {
+                        self.stash_files = files;
+                        self.stash_file_selected = 0;
+                    }
+                    Err(_) => {
+                        self.stash_files = Vec::new();
+                        self.stash_file_selected = 0;
+                    }
+                }
+            }
+        } else {
+            self.stash_files = Vec::new();
+            self.stash_file_selected = 0;
+        }
+    }
+
+    fn handle_stash_view_key(&mut self, key: KeyEvent) {
+        if self.stash_view_focus == StashViewFocus::DiffPreview {
+            self.handle_stash_diff_key(key);
+            return;
+        }
+
+        match self.stash_view_focus {
+            StashViewFocus::StashList => self.handle_stash_list_key(key),
+            StashViewFocus::FileList => self.handle_stash_file_list_key(key),
+            StashViewFocus::DiffPreview => unreachable!(),
+        }
+    }
+
+    fn handle_stash_list_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.mode = AppMode::GraphView;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if !self.stash_entries.is_empty()
+                    && self.stash_selected + 1 < self.stash_entries.len()
+                {
+                    self.stash_selected += 1;
+                    self.load_stash_files();
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.stash_selected > 0 {
+                    self.stash_selected -= 1;
+                    self.load_stash_files();
+                }
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                if self.stash_selected != 0 {
+                    self.stash_selected = 0;
+                    self.load_stash_files();
+                }
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if !self.stash_entries.is_empty() {
+                    let last = self.stash_entries.len() - 1;
+                    if self.stash_selected != last {
+                        self.stash_selected = last;
+                        self.load_stash_files();
+                    }
+                }
+            }
+            KeyCode::Char(' ') => {
+                if !self.stash_files.is_empty() {
+                    self.stash_view_focus = StashViewFocus::FileList;
+                }
+            }
+            KeyCode::Char('a') => {
+                self.apply_selected_stash();
+            }
+            KeyCode::Char('p') => {
+                self.pop_selected_stash();
+            }
+            KeyCode::Char('d') => {
+                self.drop_selected_stash();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_stash_file_list_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => {
+                self.stash_view_focus = StashViewFocus::StashList;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if !self.stash_files.is_empty()
+                    && self.stash_file_selected + 1 < self.stash_files.len()
+                {
+                    self.stash_file_selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.stash_file_selected = self.stash_file_selected.saturating_sub(1);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.stash_file_selected = 0;
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if !self.stash_files.is_empty() {
+                    self.stash_file_selected = self.stash_files.len() - 1;
+                }
+            }
+            KeyCode::Char(' ') => {
+                self.open_stash_file_diff();
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_stash_diff_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Char(' ') => {
+                self.stash_view_focus = StashViewFocus::FileList;
+                self.stash_diff = None;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.stash_diff_scroll = self.stash_diff_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.stash_diff_scroll = self.stash_diff_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.stash_diff_scroll = self.stash_diff_scroll.saturating_add(20);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.stash_diff_scroll = self.stash_diff_scroll.saturating_sub(20);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.stash_diff_scroll = 0;
+            }
+            _ => {}
+        }
+    }
+
+    fn open_stash_file_diff(&mut self) {
+        let oid = match self.stash_entries.get(self.stash_selected) {
+            Some(e) => e.oid,
+            None => return,
+        };
+        let path = match self.stash_files.get(self.stash_file_selected) {
+            Some(f) => f.path.clone(),
+            None => return,
+        };
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            match stash::stash_file_diff(&repo, oid, &path) {
+                Ok(data) => {
+                    self.stash_diff = Some(data);
+                    self.stash_diff_scroll = 0;
+                    self.stash_diff_path = path;
+                    self.stash_view_focus = StashViewFocus::DiffPreview;
+                }
+                Err(e) => {
+                    self.stash_view_error = Some(format!("Diff failed: {}", e));
+                }
+            }
+        }
+    }
+
+    fn apply_selected_stash(&mut self) {
+        let index = match self.stash_entries.get(self.stash_selected) {
+            Some(e) => e.index,
+            None => return,
+        };
+        if let Ok(mut repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = stash::apply_stash(&mut repo, index) {
+                self.stash_view_error = Some(format!("Apply failed: {}", e));
+                return;
+            }
+        }
+        self.stash_view_error = None;
+        self.refresh_stash_list();
+    }
+
+    fn pop_selected_stash(&mut self) {
+        let index = match self.stash_entries.get(self.stash_selected) {
+            Some(e) => e.index,
+            None => return,
+        };
+        if let Ok(mut repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = stash::pop_stash(&mut repo, index) {
+                self.stash_view_error = Some(format!("Pop failed: {}", e));
+                return;
+            }
+        }
+        self.stash_view_error = None;
+        self.refresh_stash_list();
+    }
+
+    fn drop_selected_stash(&mut self) {
+        let index = match self.stash_entries.get(self.stash_selected) {
+            Some(e) => e.index,
+            None => return,
+        };
+        if let Ok(mut repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = stash::drop_stash(&mut repo, index) {
+                self.stash_view_error = Some(format!("Drop failed: {}", e));
+                return;
+            }
+        }
+        self.stash_view_error = None;
+        self.refresh_stash_list();
+    }
+
+    fn refresh_stash_list(&mut self) {
+        if let Ok(mut repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Ok(entries) = stash::list_stashes(&mut repo) {
+                self.stash_entries = entries;
+                if !self.stash_entries.is_empty() {
+                    self.stash_selected = self
+                        .stash_selected
+                        .min(self.stash_entries.len() - 1);
+                } else {
+                    self.stash_selected = 0;
+                }
+                self.load_stash_files();
+            }
+        }
     }
 
     fn reload(&mut self) -> Result<()> {

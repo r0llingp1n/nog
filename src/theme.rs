@@ -21,6 +21,14 @@ pub const DIFF_DEL: Color = Color::Red;
 pub const DIFF_HUNK: Color = Color::Cyan;
 pub const DIFF_META: Color = Color::Yellow;
 
+pub const STATUS_MODIFIED: Color = Color::Yellow;
+pub const STATUS_ADDED: Color = Color::Green;
+pub const STATUS_DELETED: Color = Color::Red;
+pub const STATUS_UNTRACKED: Color = Color::Cyan;
+pub const STATUS_RENAMED: Color = Color::Magenta;
+pub const FOCUS_BORDER: Color = Color::Cyan;
+pub const UNFOCUS_BORDER: Color = Color::DarkGray;
+
 pub fn graph_color(index: usize) -> Color {
     GRAPH_COLORS[index % GRAPH_COLORS.len()]
 }

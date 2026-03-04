@@ -9,7 +9,9 @@ use crate::git::diff::DiffData;
 use crate::widgets::branch_picker::BranchPicker;
 use crate::widgets::commit_detail::CommitDetail;
 use crate::widgets::graph_view::GraphView;
+use crate::widgets::commit_view::CommitView;
 use crate::widgets::stash_prompt::StashPrompt;
+use crate::widgets::stash_view::StashView;
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
@@ -99,6 +101,35 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 };
                 frame.render_widget(detail, chunks[1]);
             }
+        }
+        AppMode::CommitView => {
+            let commit_view = CommitView {
+                unstaged: &app.commit_unstaged,
+                staged: &app.commit_staged,
+                message: &app.commit_message,
+                focus: app.commit_focus,
+                unstaged_selected: app.commit_unstaged_selected,
+                staged_selected: app.commit_staged_selected,
+                error: app.commit_error.as_deref(),
+                diff: app.commit_diff.as_ref(),
+                diff_scroll: app.commit_diff_scroll,
+                diff_path: &app.commit_diff_path,
+            };
+            frame.render_widget(commit_view, main_area);
+        }
+        AppMode::StashView => {
+            let stash_view = StashView {
+                entries: &app.stash_entries,
+                selected: app.stash_selected,
+                focus: app.stash_view_focus,
+                files: &app.stash_files,
+                file_selected: app.stash_file_selected,
+                diff: app.stash_diff.as_ref(),
+                diff_scroll: app.stash_diff_scroll,
+                diff_path: &app.stash_diff_path,
+                error: app.stash_view_error.as_deref(),
+            };
+            frame.render_widget(stash_view, main_area);
         }
     }
 
@@ -206,8 +237,9 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         | AppMode::BranchPicker
         | AppMode::StashPrompt
         | AppMode::Search => &[
+            ("c", "commit"),
+            ("s", "stash"),
             ("/", "search"),
-            ("n/N", "next/prev"),
             ("b", "branch"),
             ("q", "quit"),
         ],
@@ -215,6 +247,19 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("Space", "close"),
             ("Esc", "close"),
             ("j/k", "scroll"),
+        ],
+        AppMode::CommitView => &[
+            ("Tab", "focus"),
+            ("s/u", "stage/unstage"),
+            ("c", "commit"),
+            ("Esc", "back"),
+        ],
+        AppMode::StashView => &[
+            ("a", "apply"),
+            ("p", "pop"),
+            ("d", "drop"),
+            ("Space", "files/diff"),
+            ("Esc", "back"),
         ],
     };
 
