@@ -251,6 +251,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::CommitView => &[
             ("Tab", "focus"),
             ("s/u", "stage/unstage"),
+            ("r", "restore"),
             ("c", "commit"),
             ("Esc", "back"),
         ],

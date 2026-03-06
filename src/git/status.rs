@@ -158,6 +158,41 @@ pub fn unstage_all(repo: &Repository) -> Result<()> {
     Ok(())
 }
 
+/// Restore a file to its HEAD state (discard working tree changes).
+/// For untracked files, this deletes the file.
+pub fn restore_file(repo: &Repository, path: &str) -> Result<()> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
+    let full_path = workdir.join(path);
+
+    if let Ok(head) = repo.head() {
+        let tree = head.peel_to_tree()?;
+        if tree.get_path(std::path::Path::new(path)).is_ok() {
+            // File exists in HEAD — checkout from HEAD
+            repo.checkout_tree(
+                &tree.into_object(),
+                Some(
+                    git2::build::CheckoutBuilder::new()
+                        .force()
+                        .path(path),
+                ),
+            )?;
+        } else {
+            // File doesn't exist in HEAD (untracked) — delete it
+            if full_path.exists() {
+                std::fs::remove_file(&full_path)?;
+            }
+        }
+    } else {
+        // No HEAD (initial commit) — just delete the file
+        if full_path.exists() {
+            std::fs::remove_file(&full_path)?;
+        }
+    }
+    Ok(())
+}
+
 /// Create a commit with the current index and given message.
 pub fn create_commit(repo: &Repository, message: &str) -> Result<()> {
     let sig = repo.signature()?;

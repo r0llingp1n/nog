@@ -703,6 +703,9 @@ impl App {
             KeyCode::Char(' ') => {
                 self.open_commit_diff(false);
             }
+            KeyCode::Char('r') => {
+                self.restore_selected_file();
+            }
             KeyCode::Char('a') => {
                 self.stage_all_files();
             }
@@ -857,6 +860,25 @@ impl App {
         // If staged is now empty, move focus to unstaged
         if self.commit_staged.is_empty() {
             self.commit_focus = CommitFocus::UnstagedFiles;
+        }
+    }
+
+    fn restore_selected_file(&mut self) {
+        let path = match self.commit_unstaged.get(self.commit_unstaged_selected) {
+            Some(f) => f.path.clone(),
+            None => return,
+        };
+        if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
+            if let Err(e) = status::restore_file(&repo, &path) {
+                self.commit_error = Some(format!("Restore failed: {}", e));
+                return;
+            }
+        }
+        self.refresh_commit_status();
+        if self.commit_unstaged_selected > 0
+            && self.commit_unstaged_selected >= self.commit_unstaged.len()
+        {
+            self.commit_unstaged_selected = self.commit_unstaged.len().saturating_sub(1);
         }
     }
 

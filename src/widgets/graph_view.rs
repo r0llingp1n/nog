@@ -388,11 +388,12 @@ impl<'a> GraphView<'a> {
         ));
         spans.push(Span::raw(" ".to_string()));
 
-        // Summary — truncate to fit
+        // Summary — truncate to fit, leaving room for author and date
         let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
         let date_str = relative_time(commit.author_date);
-        let date_width = date_str.chars().count() + 2;
-        let remaining = total_width.saturating_sub(used + date_width);
+        let author_str = &commit.author_name;
+        let right_width = date_str.chars().count() + 2 + author_str.chars().count() + 2;
+        let remaining = total_width.saturating_sub(used + right_width);
 
         let summary = if commit.summary.chars().count() > remaining && remaining > 3 {
             let truncated: String = commit.summary.chars().take(remaining - 1).collect();
@@ -402,12 +403,17 @@ impl<'a> GraphView<'a> {
         };
         spans.push(Span::raw(summary.clone()));
 
-        // Right-align date
+        // Right-align author + date
         let after_summary = used + summary.chars().count();
-        let padding = total_width.saturating_sub(after_summary + date_width);
+        let padding = total_width.saturating_sub(after_summary + right_width);
         if padding > 0 {
             spans.push(Span::raw(" ".repeat(padding)));
         }
+        spans.push(Span::raw(" ".to_string()));
+        spans.push(Span::styled(
+            author_str.clone(),
+            Style::default().fg(theme::AUTHOR_COLOR),
+        ));
         spans.push(Span::raw(" ".to_string()));
         spans.push(Span::styled(
             date_str,
