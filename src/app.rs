@@ -8,6 +8,12 @@ use git2::Oid;
 use crate::git::diff::{self, DiffData};
 use crate::git::log;
 use crate::git::repo;
+
+pub struct BranchInfo {
+    pub name: String,
+    pub commit_summary: String,
+    pub author: String,
+}
 use crate::git::stash::{self, StashEntry};
 use crate::git::status::{self, FileStatus};
 use crate::git::types::{CommitInfo, Decorations};
@@ -67,7 +73,7 @@ pub struct App {
     pub show_remotes: bool,
 
     // Branch picker state
-    pub branches: Vec<String>,
+    pub branches: Vec<BranchInfo>,
     pub branch_selected: usize,
     pub branch_error: Option<String>,
 
@@ -293,21 +299,35 @@ impl App {
 
     fn open_branch_picker(&mut self) {
         if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
-            let mut branches = Vec::new();
+            let mut branches: Vec<BranchInfo> = Vec::new();
             if let Ok(iter) = repo.branches(Some(git2::BranchType::Local)) {
                 for branch_result in iter {
                     if let Ok((branch, _)) = branch_result {
                         if let Ok(Some(name)) = branch.name() {
-                            branches.push(name.to_string());
+                            let (commit_summary, author) = branch
+                                .get()
+                                .peel_to_commit()
+                                .ok()
+                                .map(|c| {
+                                    let summary = c.summary().unwrap_or("").to_string();
+                                    let author = c.author().name().unwrap_or("").to_string();
+                                    (summary, author)
+                                })
+                                .unwrap_or_default();
+                            branches.push(BranchInfo {
+                                name: name.to_string(),
+                                commit_summary,
+                                author,
+                            });
                         }
                     }
                 }
             }
-            branches.sort();
+            branches.sort_by(|a, b| a.name.cmp(&b.name));
             // Pre-select current branch
             let selected = branches
                 .iter()
-                .position(|b| b == &self.branch_name)
+                .position(|b| b.name == self.branch_name)
                 .unwrap_or(0);
             self.branches = branches;
             self.branch_selected = selected;
@@ -338,7 +358,7 @@ impl App {
 
     fn checkout_selected_branch(&mut self) {
         let branch_name = match self.branches.get(self.branch_selected) {
-            Some(name) => name.clone(),
+            Some(info) => info.name.clone(),
             None => return,
         };
 

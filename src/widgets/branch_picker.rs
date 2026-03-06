@@ -5,9 +5,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap};
 
 use super::popup::centered_rect;
+use crate::app::BranchInfo;
 
 pub struct BranchPicker<'a> {
-    pub branches: &'a [String],
+    pub branches: &'a [BranchInfo],
     pub selected: usize,
     pub current_branch: &'a str,
     pub error: Option<&'a str>,
@@ -28,12 +29,11 @@ impl<'a> Widget for BranchPicker<'a> {
 
         for (i, branch) in self.branches.iter().enumerate() {
             let is_selected = i == self.selected;
-            let is_current = branch == self.current_branch;
+            let is_current = branch.name == self.current_branch;
 
             let marker = if is_current { "* " } else { "  " };
-            let label = format!("{}{}", marker, branch);
 
-            let style = if is_selected {
+            let base_style = if is_selected {
                 Style::default()
                     .bg(ratatui::style::Color::DarkGray)
                     .add_modifier(Modifier::BOLD)
@@ -43,7 +43,23 @@ impl<'a> Widget for BranchPicker<'a> {
                 Style::default()
             };
 
-            lines.push(Line::from(Span::styled(label, style)));
+            let dim_style = if is_selected {
+                Style::default()
+                    .bg(ratatui::style::Color::DarkGray)
+                    .fg(ratatui::style::Color::Gray)
+            } else {
+                Style::default().fg(ratatui::style::Color::DarkGray)
+            };
+
+            let mut spans = vec![
+                Span::styled(format!("{}{}", marker, branch.name), base_style),
+                Span::styled(format!("  {}", branch.commit_summary), dim_style),
+            ];
+            if !branch.author.is_empty() {
+                spans.push(Span::styled(format!(" — {}", branch.author), dim_style));
+            }
+
+            lines.push(Line::from(spans));
         }
 
         // Hint at the bottom
