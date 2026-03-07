@@ -298,12 +298,22 @@ impl App {
     }
 
     fn open_branch_picker(&mut self) {
+        self.reload_branch_list();
+        self.mode = AppMode::BranchPicker;
+    }
+
+    fn reload_branch_list(&mut self) {
         if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
             let mut branches: Vec<BranchInfo> = Vec::new();
-            if let Ok(iter) = repo.branches(Some(git2::BranchType::Local)) {
+            let filter = if self.show_remotes { None } else { Some(git2::BranchType::Local) };
+            if let Ok(iter) = repo.branches(filter) {
                 for branch_result in iter {
-                    if let Ok((branch, _)) = branch_result {
+                    if let Ok((branch, branch_type)) = branch_result {
                         if let Ok(Some(name)) = branch.name() {
+                            // Skip HEAD aliases for remote branches
+                            if branch_type == git2::BranchType::Remote && name.ends_with("/HEAD") {
+                                continue;
+                            }
                             let (commit_summary, author) = branch
                                 .get()
                                 .peel_to_commit()
@@ -332,7 +342,6 @@ impl App {
             self.branches = branches;
             self.branch_selected = selected;
             self.branch_error = None;
-            self.mode = AppMode::BranchPicker;
         }
     }
 

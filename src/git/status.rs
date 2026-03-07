@@ -122,11 +122,10 @@ pub fn stage_file(repo: &Repository, path: &str) -> Result<()> {
 
 /// Unstage a single file (reset index entry to HEAD).
 pub fn unstage_file(repo: &Repository, path: &str) -> Result<()> {
-    if let Ok(head) = repo.head() {
-        let tree = head.peel_to_tree()?;
+    if let Ok(tree) = repo.head().and_then(|h| h.peel_to_tree()) {
         repo.reset_default(Some(&tree.into_object()), [path])?;
     } else {
-        // Initial commit: remove from index entirely
+        // No HEAD or unborn branch: remove from index entirely
         let mut index = repo.index()?;
         index.remove_path(std::path::Path::new(path))?;
         index.write()?;
@@ -145,9 +144,7 @@ pub fn stage_all(repo: &Repository) -> Result<()> {
 
 /// Unstage all files (reset index to HEAD).
 pub fn unstage_all(repo: &Repository) -> Result<()> {
-    if let Ok(head) = repo.head() {
-        let commit = head.peel_to_commit()?;
-        let tree = commit.tree()?;
+    if let Ok(tree) = repo.head().and_then(|h| h.peel_to_tree()) {
         repo.reset_default(Some(&tree.into_object()), ["*"])?;
     } else {
         // Initial commit: clear the index

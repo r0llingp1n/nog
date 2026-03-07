@@ -241,6 +241,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("s", "stash"),
             ("/", "search"),
             ("b", "branch"),
+            ("r", "remotes"),
             ("q", "quit"),
         ],
         AppMode::QuickView => &[
