@@ -273,8 +273,8 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(format!(":{}", desc), base.fg(desc_fg)));
     }
 
-    // Right side: commit position
-    let right = format!(" {}/{} ", selected, commit_count);
+    // Right side: version + commit position
+    let right = format!(" v{}  {}/{} ", env!("CARGO_PKG_VERSION"), selected, commit_count);
     let used: usize = spans.iter().map(|s| s.content.len()).sum();
     let padding = (area.width as usize).saturating_sub(used + right.len());
     spans.push(Span::styled(" ".repeat(padding), base));

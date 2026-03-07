@@ -18,8 +18,14 @@ use notify::{RecursiveMode, Watcher};
 use ratatui::prelude::*;
 
 fn main() -> Result<()> {
-    let repo_path = std::env::args()
-        .nth(1)
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("nog {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    let repo_path = args
+        .get(1)
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap());
 
