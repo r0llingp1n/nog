@@ -263,9 +263,10 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(format!(":{}", desc), base.fg(desc_fg)));
     }
 
-    // Right side: version + commit position
+    // Right side: repo path + version + commit position
     let right = format!(
-        " v{}  {}/{} ",
+        " {}  v{}  {}/{} ",
+        app.repo_path.to_string_lossy(),
         env!("CARGO_PKG_VERSION"),
         selected,
         commit_count
