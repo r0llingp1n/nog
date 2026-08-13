@@ -75,7 +75,9 @@ impl<'a> Widget for BranchPicker<'a> {
             .map(|l| l.spans.iter().map(|s| s.content.len()).sum::<usize>())
             .max()
             .unwrap_or(20);
-        let popup_width = (content_width as u16 + 4).max(24).min(area.width.saturating_sub(4));
+        let popup_width = (content_width as u16 + 4)
+            .max(24)
+            .min(area.width.saturating_sub(4));
         let popup_height = (lines.len() as u16 + 2).min(area.height.saturating_sub(4));
         let popup = centered_rect(popup_width, popup_height, area);
 

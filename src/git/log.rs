@@ -23,10 +23,7 @@ pub fn walk_commits(repo: &Repository, max_count: usize) -> Result<Vec<CommitInf
         let commit = repo.find_commit(oid)?;
 
         let short_id = format!("{:.7}", oid);
-        let summary = commit
-            .summary()
-            .unwrap_or("")
-            .to_string();
+        let summary = commit.summary().unwrap_or("").to_string();
         let author = commit.author();
         let author_name = author.name().unwrap_or("").to_string();
         let author_date = Local

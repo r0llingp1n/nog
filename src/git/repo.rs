@@ -51,7 +51,10 @@ pub fn load_decorations(repo: &Repository) -> Result<HashMap<Oid, Decorations>> 
             .to_string();
         if let Ok(obj) = repo.find_object(oid, None) {
             if let Ok(commit) = obj.peel_to_commit() {
-                map.entry(commit.id()).or_default().tags.push(TagInfo { name });
+                map.entry(commit.id())
+                    .or_default()
+                    .tags
+                    .push(TagInfo { name });
             }
         }
         true

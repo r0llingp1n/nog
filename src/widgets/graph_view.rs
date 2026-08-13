@@ -10,8 +10,8 @@ use crate::graph::glyphs;
 use crate::graph::types::GraphRow;
 use crate::theme;
 
-use std::collections::HashMap;
 use git2::Oid;
+use std::collections::HashMap;
 
 pub struct GraphViewState {
     pub selected: usize,
@@ -285,14 +285,11 @@ impl<'a> GraphView<'a> {
                     glyphs::VERTICAL.to_string(),
                     Style::default().fg(theme::graph_color(*color_idx)),
                 ));
-                let between_merge = has_merge
-                    && merge_min.is_some()
-                    && merge_max.is_some()
-                    && {
-                        let lo = graph_row.commit_col.min(merge_min.unwrap());
-                        let hi = graph_row.commit_col.max(merge_max.unwrap());
-                        col > lo && col < hi
-                    };
+                let between_merge = has_merge && merge_min.is_some() && merge_max.is_some() && {
+                    let lo = graph_row.commit_col.min(merge_min.unwrap());
+                    let hi = graph_row.commit_col.max(merge_max.unwrap());
+                    col > lo && col < hi
+                };
                 if between_merge {
                     spans.push(Span::styled(
                         "─".to_string(),
@@ -302,14 +299,11 @@ impl<'a> GraphView<'a> {
                     spans.push(Span::raw(" ".to_string()));
                 }
             } else {
-                let between_merge = has_merge
-                    && merge_min.is_some()
-                    && merge_max.is_some()
-                    && {
-                        let lo = graph_row.commit_col.min(merge_min.unwrap());
-                        let hi = graph_row.commit_col.max(merge_max.unwrap());
-                        col > lo && col < hi
-                    };
+                let between_merge = has_merge && merge_min.is_some() && merge_max.is_some() && {
+                    let lo = graph_row.commit_col.min(merge_min.unwrap());
+                    let hi = graph_row.commit_col.max(merge_max.unwrap());
+                    col > lo && col < hi
+                };
                 if between_merge {
                     spans.push(Span::styled(
                         "──".to_string(),
@@ -339,10 +333,7 @@ impl<'a> GraphView<'a> {
                     "──".to_string(),
                     Style::default().fg(commit_color),
                 ));
-                spans.push(Span::styled(
-                    " ".to_string(),
-                    Style::default(),
-                ));
+                spans.push(Span::styled(" ".to_string(), Style::default()));
                 spans.push(Span::styled(
                     label.clone(),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),

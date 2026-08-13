@@ -305,7 +305,11 @@ impl App {
     fn reload_branch_list(&mut self) {
         if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {
             let mut branches: Vec<BranchInfo> = Vec::new();
-            let filter = if self.show_remotes { None } else { Some(git2::BranchType::Local) };
+            let filter = if self.show_remotes {
+                None
+            } else {
+                Some(git2::BranchType::Local)
+            };
             if let Ok(iter) = repo.branches(filter) {
                 for branch_result in iter {
                     if let Ok((branch, branch_type)) = branch_result {
@@ -1199,9 +1203,7 @@ impl App {
             if let Ok(entries) = stash::list_stashes(&mut repo) {
                 self.stash_entries = entries;
                 if !self.stash_entries.is_empty() {
-                    self.stash_selected = self
-                        .stash_selected
-                        .min(self.stash_entries.len() - 1);
+                    self.stash_selected = self.stash_selected.min(self.stash_entries.len() - 1);
                 } else {
                     self.stash_selected = 0;
                 }
@@ -1235,8 +1237,7 @@ impl App {
             }
             // Clamp selection
             if !self.commits.is_empty() {
-                self.graph_state.selected =
-                    self.graph_state.selected.min(self.commits.len() - 1);
+                self.graph_state.selected = self.graph_state.selected.min(self.commits.len() - 1);
             }
 
             // Update branch name

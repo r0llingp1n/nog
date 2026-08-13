@@ -73,10 +73,7 @@ pub fn get_status(repo: &Repository) -> Result<(Vec<FileStatus>, Vec<FileStatus>
 
         // Workdir (unstaged) changes
         if st.intersects(
-            Status::WT_MODIFIED
-                | Status::WT_DELETED
-                | Status::WT_TYPECHANGE
-                | Status::WT_RENAMED,
+            Status::WT_MODIFIED | Status::WT_DELETED | Status::WT_TYPECHANGE | Status::WT_RENAMED,
         ) {
             let code = if st.contains(Status::WT_MODIFIED) {
                 FileStatusCode::Modified
@@ -108,9 +105,7 @@ pub fn get_status(repo: &Repository) -> Result<(Vec<FileStatus>, Vec<FileStatus>
 /// Stage a single file (add to index).
 pub fn stage_file(repo: &Repository, path: &str) -> Result<()> {
     let mut index = repo.index()?;
-    let workdir = repo
-        .workdir()
-        .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
+    let workdir = repo.workdir().ok_or_else(|| anyhow::anyhow!("bare repo"))?;
     if workdir.join(path).exists() {
         index.add_path(std::path::Path::new(path))?;
     } else {
@@ -158,9 +153,7 @@ pub fn unstage_all(repo: &Repository) -> Result<()> {
 /// Restore a file to its HEAD state (discard working tree changes).
 /// For untracked files, this deletes the file.
 pub fn restore_file(repo: &Repository, path: &str) -> Result<()> {
-    let workdir = repo
-        .workdir()
-        .ok_or_else(|| anyhow::anyhow!("bare repo"))?;
+    let workdir = repo.workdir().ok_or_else(|| anyhow::anyhow!("bare repo"))?;
     let full_path = workdir.join(path);
 
     if let Ok(head) = repo.head() {
@@ -169,11 +162,7 @@ pub fn restore_file(repo: &Repository, path: &str) -> Result<()> {
             // File exists in HEAD — checkout from HEAD
             repo.checkout_tree(
                 &tree.into_object(),
-                Some(
-                    git2::build::CheckoutBuilder::new()
-                        .force()
-                        .path(path),
-                ),
+                Some(git2::build::CheckoutBuilder::new().force().path(path)),
             )?;
         } else {
             // File doesn't exist in HEAD (untracked) — delete it

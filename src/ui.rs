@@ -8,8 +8,8 @@ use crate::app::{App, AppMode};
 use crate::git::diff::DiffData;
 use crate::widgets::branch_picker::BranchPicker;
 use crate::widgets::commit_detail::CommitDetail;
-use crate::widgets::graph_view::GraphView;
 use crate::widgets::commit_view::CommitView;
+use crate::widgets::graph_view::GraphView;
 use crate::widgets::stash_prompt::StashPrompt;
 use crate::widgets::stash_view::StashView;
 
@@ -39,10 +39,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
 
     match app.mode {
-        AppMode::GraphView
-        | AppMode::BranchPicker
-        | AppMode::StashPrompt
-        | AppMode::Search => {
+        AppMode::GraphView | AppMode::BranchPicker | AppMode::StashPrompt | AppMode::Search => {
             let graph = GraphView {
                 commits: &app.commits,
                 graph_rows: &app.graph_rows,
@@ -60,10 +57,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 };
                 frame.render_widget(picker, main_area);
             } else if app.mode == AppMode::StashPrompt {
-                let target = app
-                    .stash_target_branch
-                    .as_deref()
-                    .unwrap_or("unknown");
+                let target = app.stash_target_branch.as_deref().unwrap_or("unknown");
                 let prompt = StashPrompt {
                     input: &app.stash_input,
                     target_branch: target,
@@ -87,9 +81,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             frame.render_stateful_widget(graph, chunks[0], &mut app.graph_state);
 
             if let Some(commit) = app.selected_commit().cloned() {
-                let empty_diff = DiffData {
-                    files: Vec::new(),
-                };
+                let empty_diff = DiffData { files: Vec::new() };
                 let message = app.selected_message.as_deref().unwrap_or("");
                 let diff_data = app.selected_diff.as_ref().unwrap_or(&empty_diff);
 
@@ -224,7 +216,12 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         let idx = app.search_match_idx.map(|i| i + 1).unwrap_or(0);
         let total = app.search_matches.len();
         spans.push(Span::styled(
-            format!(" /{} [{}/{}]", app.search_pattern.as_deref().unwrap_or(""), idx, total),
+            format!(
+                " /{} [{}/{}]",
+                app.search_pattern.as_deref().unwrap_or(""),
+                idx,
+                total
+            ),
             base.fg(Color::Rgb(210, 210, 130)),
         ));
     }
@@ -233,10 +230,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     // Key hints
     let hints: &[(&str, &str)] = match app.mode {
-        AppMode::GraphView
-        | AppMode::BranchPicker
-        | AppMode::StashPrompt
-        | AppMode::Search => &[
+        AppMode::GraphView | AppMode::BranchPicker | AppMode::StashPrompt | AppMode::Search => &[
             ("c", "commit"),
             ("s", "stash"),
             ("/", "search"),
@@ -244,11 +238,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("r", "remotes"),
             ("q", "quit"),
         ],
-        AppMode::QuickView => &[
-            ("Space", "close"),
-            ("Esc", "close"),
-            ("j/k", "scroll"),
-        ],
+        AppMode::QuickView => &[("Space", "close"), ("Esc", "close"), ("j/k", "scroll")],
         AppMode::CommitView => &[
             ("Tab", "focus"),
             ("s/u", "stage/unstage"),
@@ -274,7 +264,12 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     // Right side: version + commit position
-    let right = format!(" v{}  {}/{} ", env!("CARGO_PKG_VERSION"), selected, commit_count);
+    let right = format!(
+        " v{}  {}/{} ",
+        env!("CARGO_PKG_VERSION"),
+        selected,
+        commit_count
+    );
     let used: usize = spans.iter().map(|s| s.content.len()).sum();
     let padding = (area.width as usize).saturating_sub(used + right.len());
     spans.push(Span::styled(" ".repeat(padding), base));

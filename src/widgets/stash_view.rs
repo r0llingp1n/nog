@@ -67,7 +67,13 @@ impl StashView<'_> {
         };
 
         let mut lines: Vec<Line<'static>> = Vec::new();
-        for (i, entry) in self.entries.iter().enumerate().skip(offset).take(visible_height) {
+        for (i, entry) in self
+            .entries
+            .iter()
+            .enumerate()
+            .skip(offset)
+            .take(visible_height)
+        {
             let is_selected = focused && i == self.selected;
 
             let bg = if is_selected {
@@ -81,9 +87,7 @@ impl StashView<'_> {
 
             lines.push(Line::from(Span::styled(
                 format!("{}{}", label, " ".repeat(pad)),
-                Style::default()
-                    .fg(ratatui::style::Color::White)
-                    .bg(bg),
+                Style::default().fg(ratatui::style::Color::White).bg(bg),
             )));
         }
 
@@ -107,7 +111,10 @@ impl StashView<'_> {
         };
 
         let stash_label = if !self.entries.is_empty() {
-            format!("stash@{{{}}}", self.entries.get(self.selected).map_or(0, |e| e.index))
+            format!(
+                "stash@{{{}}}",
+                self.entries.get(self.selected).map_or(0, |e| e.index)
+            )
         } else {
             String::new()
         };
@@ -145,7 +152,13 @@ impl StashView<'_> {
         };
 
         let mut lines: Vec<Line<'static>> = Vec::new();
-        for (i, file) in self.files.iter().enumerate().skip(offset).take(visible_height) {
+        for (i, file) in self
+            .files
+            .iter()
+            .enumerate()
+            .skip(offset)
+            .take(visible_height)
+        {
             let is_selected = focused && i == self.file_selected;
 
             let status_color = match file.status_code {
@@ -175,9 +188,7 @@ impl StashView<'_> {
                 ),
                 Span::styled(
                     format!("{}{}", path, " ".repeat(pad)),
-                    Style::default()
-                        .fg(ratatui::style::Color::White)
-                        .bg(bg),
+                    Style::default().fg(ratatui::style::Color::White).bg(bg),
                 ),
             ]));
         }

@@ -53,10 +53,7 @@ fn main() -> Result<()> {
     result
 }
 
-fn setup_watcher(
-    repo_path: &PathBuf,
-    tx: mpsc::Sender<()>,
-) -> Option<notify::RecommendedWatcher> {
+fn setup_watcher(repo_path: &PathBuf, tx: mpsc::Sender<()>) -> Option<notify::RecommendedWatcher> {
     // Watch the .git directory for changes (commits, refs, index, etc.)
     let git_dir = if let Ok(repo) = git::repo::open_repo(repo_path) {
         repo.path().to_path_buf()
@@ -71,19 +68,20 @@ fn setup_watcher(
         None
     };
 
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        if let Ok(event) = res {
-            // Only trigger on modify/create/remove, skip access events
-            use notify::EventKind;
-            match event.kind {
-                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
-                    let _ = tx.send(());
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                // Only trigger on modify/create/remove, skip access events
+                use notify::EventKind;
+                match event.kind {
+                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+                        let _ = tx.send(());
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
-    })
-    .ok()?;
+        })
+        .ok()?;
 
     // Watch .git (refs, HEAD, index changes)
     let _ = watcher.watch(&git_dir, RecursiveMode::Recursive);

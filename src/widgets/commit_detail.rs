@@ -46,7 +46,12 @@ impl<'a> Widget for CommitDetail<'a> {
         ]));
         lines.push(Line::from(vec![
             Span::styled("Date:   ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(self.commit.author_date.format("%Y-%m-%d %H:%M:%S").to_string()),
+            Span::raw(
+                self.commit
+                    .author_date
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            ),
         ]));
         lines.push(Line::from(""));
 
@@ -92,13 +97,9 @@ impl<'a> Widget for CommitDetail<'a> {
             )));
         }
 
-        let block = Block::default()
-            .borders(Borders::TOP)
-            .title(" Quick View ");
+        let block = Block::default().borders(Borders::TOP).title(" Quick View ");
 
-        let paragraph = Paragraph::new(lines)
-            .block(block)
-            .scroll((self.scroll, 0));
+        let paragraph = Paragraph::new(lines).block(block).scroll((self.scroll, 0));
 
         paragraph.render(area, buf);
     }

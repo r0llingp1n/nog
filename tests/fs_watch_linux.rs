@@ -20,18 +20,19 @@ fn test_inotify_on_git_dir() {
     let git_dir = tmp.join(".git");
     let (tx, rx) = mpsc::channel();
 
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        if let Ok(event) = res {
-            use notify::EventKind;
-            match event.kind {
-                EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
-                    let _ = tx.send(event.kind);
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                use notify::EventKind;
+                match event.kind {
+                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+                        let _ = tx.send(event.kind);
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
-    })
-    .expect("failed to create watcher");
+        })
+        .expect("failed to create watcher");
 
     watcher
         .watch(&git_dir, RecursiveMode::Recursive)
@@ -56,10 +57,7 @@ fn test_inotify_on_git_dir() {
     // Also test .git dir changes (simulate a commit-like write)
     fs::write(git_dir.join("test_ref"), "abc123").unwrap();
     let event2 = rx.recv_timeout(Duration::from_secs(2));
-    assert!(
-        event2.is_ok(),
-        "expected fs event on .git dir within 2s"
-    );
+    assert!(event2.is_ok(), "expected fs event on .git dir within 2s");
     eprintln!("received .git event: {:?}", event2.unwrap());
 
     // Cleanup

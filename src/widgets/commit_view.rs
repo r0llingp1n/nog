@@ -107,9 +107,7 @@ impl CommitView<'_> {
                 ),
                 Span::styled(
                     format!("{}{}", path, " ".repeat(pad)),
-                    Style::default()
-                        .fg(ratatui::style::Color::White)
-                        .bg(bg),
+                    Style::default().fg(ratatui::style::Color::White).bg(bg),
                 ),
             ]));
         }
@@ -276,10 +274,6 @@ impl Widget for CommitView<'_> {
             buf,
         );
 
-        self.render_message_editor(
-            self.focus == CommitFocus::MessageEditor,
-            chunks[2],
-            buf,
-        );
+        self.render_message_editor(self.focus == CommitFocus::MessageEditor, chunks[2], buf);
     }
 }
