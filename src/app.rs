@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Oid;
 
 use crate::git::diff::{self, DiffData};
-use crate::git::log;
+use crate::git::log::{self, WalkScope};
 use crate::git::repo;
 
 pub struct BranchInfo {
@@ -71,6 +71,8 @@ pub struct App {
     repo_internal_path: PathBuf,
     pub branch_name: String,
     pub show_remotes: bool,
+    /// When true, show only commits reachable from HEAD.
+    pub branch_filter: bool,
 
     // Branch picker state
     pub branches: Vec<BranchInfo>,
@@ -129,7 +131,7 @@ impl App {
             .ok()
             .and_then(|h| h.shorthand().map(String::from))
             .unwrap_or_else(|| "HEAD (detached)".to_string());
-        let commits = log::walk_commits(&repository, MAX_COMMITS)?;
+        let commits = log::walk_commits(&repository, MAX_COMMITS, WalkScope::AllBranches)?;
         let decorations = repo::load_decorations(&repository)?;
         let graph_rows = layout::compute_graph_layout(&commits);
 
@@ -147,6 +149,7 @@ impl App {
             repo_internal_path,
             branch_name,
             show_remotes: false,
+            branch_filter: false,
             branches: Vec::new(),
             branch_selected: 0,
             branch_error: None,
@@ -243,6 +246,10 @@ impl App {
             }
             KeyCode::Char('r') => {
                 self.show_remotes = !self.show_remotes;
+            }
+            KeyCode::Char('B') => {
+                self.branch_filter = !self.branch_filter;
+                self.refresh();
             }
             KeyCode::Char('b') => {
                 self.open_branch_picker();
@@ -509,20 +516,11 @@ impl App {
         self.execute_search();
     }
 
-    fn execute_search(&mut self) {
-        if self.search_input.is_empty() {
-            self.search_pattern = None;
-            self.search_matches.clear();
-            self.search_match_idx = None;
-            return;
-        }
-
-        let pattern = self.search_input.to_lowercase();
-        self.search_pattern = Some(self.search_input.clone());
-
-        // Match against hash, summary, author, and decorations
-        self.search_matches = self
-            .commits
+    /// Indices into `self.commits` whose hash, summary, author, or decorations
+    /// contain `pattern` (case-insensitive).
+    fn matching_commit_indices(&self, pattern: &str) -> Vec<usize> {
+        let pattern = pattern.to_lowercase();
+        self.commits
             .iter()
             .enumerate()
             .filter(|(_, c)| {
@@ -554,7 +552,40 @@ impl App {
                 false
             })
             .map(|(i, _)| i)
-            .collect();
+            .collect()
+    }
+
+    /// Recompute search matches against the current commit list without moving
+    /// the selection. Called after anything rebuilds `self.commits`, since
+    /// `search_matches` holds raw indices that would otherwise go stale.
+    fn resync_search(&mut self) {
+        let Some(pattern) = self.search_pattern.clone() else {
+            return;
+        };
+        self.search_matches = self.matching_commit_indices(&pattern);
+
+        // Re-anchor to the first match at or after the current selection
+        self.search_match_idx = self
+            .search_matches
+            .iter()
+            .position(|&m| m >= self.graph_state.selected)
+            .or(if self.search_matches.is_empty() {
+                None
+            } else {
+                Some(self.search_matches.len() - 1)
+            });
+    }
+
+    fn execute_search(&mut self) {
+        if self.search_input.is_empty() {
+            self.search_pattern = None;
+            self.search_matches.clear();
+            self.search_match_idx = None;
+            return;
+        }
+
+        self.search_pattern = Some(self.search_input.clone());
+        self.search_matches = self.matching_commit_indices(&self.search_input);
 
         // Jump to the nearest match from current position
         if !self.search_matches.is_empty() {
@@ -599,8 +630,10 @@ impl App {
             }
             None => 0,
         };
-        self.search_match_idx = Some(next);
-        self.graph_state.selected = self.search_matches[next];
+        if let Some(&commit_idx) = self.search_matches.get(next) {
+            self.search_match_idx = Some(next);
+            self.graph_state.selected = commit_idx;
+        }
     }
 
     fn search_prev(&mut self) {
@@ -621,8 +654,10 @@ impl App {
             }
             None => 0,
         };
-        self.search_match_idx = Some(prev);
-        self.graph_state.selected = self.search_matches[prev];
+        if let Some(&commit_idx) = self.search_matches.get(prev) {
+            self.search_match_idx = Some(prev);
+            self.graph_state.selected = commit_idx;
+        }
     }
 
     fn open_commit_view(&mut self) {
@@ -1210,13 +1245,20 @@ impl App {
 
     fn reload(&mut self) -> Result<()> {
         let repo = git2::Repository::open(&self.repo_internal_path)?;
-        self.commits = log::walk_commits(&repo, MAX_COMMITS)?;
+        let scope = if self.branch_filter {
+            WalkScope::HeadOnly
+        } else {
+            WalkScope::AllBranches
+        };
+        self.commits = log::walk_commits(&repo, MAX_COMMITS, scope)?;
         self.decorations = repo::load_decorations(&repo)?;
         self.graph_rows = layout::compute_graph_layout(&self.commits);
         self.graph_state.selected = 0;
         self.graph_state.offset = 0;
         self.selected_message = None;
         self.selected_diff = None;
+        // search_matches holds indices into self.commits, which we just rebuilt
+        self.resync_search();
         Ok(())
     }
 
@@ -1235,6 +1277,9 @@ impl App {
             if !self.commits.is_empty() {
                 self.graph_state.selected = self.graph_state.selected.min(self.commits.len() - 1);
             }
+
+            // Re-anchor the search cursor now that the selection is restored
+            self.resync_search();
 
             // Update branch name
             if let Ok(repo) = git2::Repository::open(&self.repo_internal_path) {

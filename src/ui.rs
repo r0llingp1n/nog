@@ -211,6 +211,11 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(" remotes", base.fg(Color::Rgb(210, 130, 130))));
     }
 
+    // Branch filter indicator
+    if app.branch_filter {
+        spans.push(Span::styled(" branch", base.fg(Color::Rgb(130, 190, 210))));
+    }
+
     // Active search indicator
     if app.search_pattern.is_some() && !app.search_matches.is_empty() {
         let idx = app.search_match_idx.map(|i| i + 1).unwrap_or(0);
@@ -235,6 +240,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("s", "stash"),
             ("/", "search"),
             ("b", "branch"),
+            ("B", "filter"),
             ("r", "remotes"),
             ("q", "quit"),
         ],

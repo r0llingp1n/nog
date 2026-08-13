@@ -4,14 +4,38 @@ use git2::{Repository, Sort};
 
 use super::types::CommitInfo;
 
-pub fn walk_commits(repo: &Repository, max_count: usize) -> Result<Vec<CommitInfo>> {
+/// Which refs to seed the revwalk with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkScope {
+    /// Every local and remote branch tip — the full graph.
+    AllBranches,
+    /// HEAD only, so we see just the current branch's ancestry.
+    HeadOnly,
+}
+
+pub fn walk_commits(
+    repo: &Repository,
+    max_count: usize,
+    scope: WalkScope,
+) -> Result<Vec<CommitInfo>> {
     let mut revwalk = repo.revwalk()?;
 
-    // Push all branch heads so we see the full graph
-    for branch in repo.branches(None)? {
-        let (branch, _) = branch?;
-        if let Some(oid) = branch.get().target() {
-            revwalk.push(oid)?;
+    match scope {
+        WalkScope::AllBranches => {
+            // Push all branch heads so we see the full graph
+            for branch in repo.branches(None)? {
+                let (branch, _) = branch?;
+                if let Some(oid) = branch.get().target() {
+                    revwalk.push(oid)?;
+                }
+            }
+        }
+        WalkScope::HeadOnly => {
+            // Also covers a detached HEAD. On an unborn HEAD there is nothing
+            // to walk, so return empty rather than failing the reload.
+            if revwalk.push_head().is_err() {
+                return Ok(Vec::new());
+            }
         }
     }
 

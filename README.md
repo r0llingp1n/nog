@@ -72,6 +72,7 @@ Or, after building a release binary:
 | s                 | Open stash view      |
 | r                 | Toggle remote refs   |
 | b                 | Open branch picker   |
+| B                 | Toggle branch filter |
 
 ### Search
 
