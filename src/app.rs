@@ -311,29 +311,27 @@ impl App {
                 Some(git2::BranchType::Local)
             };
             if let Ok(iter) = repo.branches(filter) {
-                for branch_result in iter {
-                    if let Ok((branch, branch_type)) = branch_result {
-                        if let Ok(Some(name)) = branch.name() {
-                            // Skip HEAD aliases for remote branches
-                            if branch_type == git2::BranchType::Remote && name.ends_with("/HEAD") {
-                                continue;
-                            }
-                            let (commit_summary, author) = branch
-                                .get()
-                                .peel_to_commit()
-                                .ok()
-                                .map(|c| {
-                                    let summary = c.summary().unwrap_or("").to_string();
-                                    let author = c.author().name().unwrap_or("").to_string();
-                                    (summary, author)
-                                })
-                                .unwrap_or_default();
-                            branches.push(BranchInfo {
-                                name: name.to_string(),
-                                commit_summary,
-                                author,
-                            });
+                for (branch, branch_type) in iter.flatten() {
+                    if let Ok(Some(name)) = branch.name() {
+                        // Skip HEAD aliases for remote branches
+                        if branch_type == git2::BranchType::Remote && name.ends_with("/HEAD") {
+                            continue;
                         }
+                        let (commit_summary, author) = branch
+                            .get()
+                            .peel_to_commit()
+                            .ok()
+                            .map(|c| {
+                                let summary = c.summary().unwrap_or("").to_string();
+                                let author = c.author().name().unwrap_or("").to_string();
+                                (summary, author)
+                            })
+                            .unwrap_or_default();
+                        branches.push(BranchInfo {
+                            name: name.to_string(),
+                            commit_summary,
+                            author,
+                        });
                     }
                 }
             }
@@ -593,12 +591,10 @@ impl App {
             Some(idx) => {
                 if self.search_direction == SearchDirection::Forward {
                     (idx + 1) % self.search_matches.len()
+                } else if idx == 0 {
+                    self.search_matches.len() - 1
                 } else {
-                    if idx == 0 {
-                        self.search_matches.len() - 1
-                    } else {
-                        idx - 1
-                    }
+                    idx - 1
                 }
             }
             None => 0,

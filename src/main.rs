@@ -6,11 +6,11 @@ mod ui;
 mod widgets;
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use crossterm::execute;
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
@@ -24,10 +24,11 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let repo_path = args
-        .get(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap());
+    let repo_path = match args.get(1) {
+        Some(arg) => PathBuf::from(arg),
+        None => std::env::current_dir()
+            .context("could not determine the current directory; pass a repo path explicitly")?,
+    };
 
     let mut app = app::App::new(repo_path)?;
 
@@ -53,7 +54,7 @@ fn main() -> Result<()> {
     result
 }
 
-fn setup_watcher(repo_path: &PathBuf, tx: mpsc::Sender<()>) -> Option<notify::RecommendedWatcher> {
+fn setup_watcher(repo_path: &Path, tx: mpsc::Sender<()>) -> Option<notify::RecommendedWatcher> {
     // Watch the .git directory for changes (commits, refs, index, etc.)
     let git_dir = if let Ok(repo) = git::repo::open_repo(repo_path) {
         repo.path().to_path_buf()
@@ -100,7 +101,8 @@ fn run_loop(
     fs_rx: &mpsc::Receiver<()>,
 ) -> Result<()> {
     // Debounce: don't reload more than once per 500ms
-    let mut last_reload = Instant::now();
+    let mut last_reload: Option<Instant> = None;
+    let mut pending_reload = false;
     let debounce = Duration::from_millis(500);
 
     loop {
@@ -112,15 +114,17 @@ fn run_loop(
             }
         }
 
-        // Check for filesystem changes (non-blocking drain)
-        let mut needs_reload = false;
+        // Check for filesystem changes (non-blocking drain).
+        // Keep the pending flag set until a reload actually consumes it, so an
+        // event arriving inside the debounce window is deferred, not dropped.
         while fs_rx.try_recv().is_ok() {
-            needs_reload = true;
+            pending_reload = true;
         }
 
-        if needs_reload && last_reload.elapsed() >= debounce {
+        if pending_reload && last_reload.is_none_or(|t| t.elapsed() >= debounce) {
             app.refresh();
-            last_reload = Instant::now();
+            last_reload = Some(Instant::now());
+            pending_reload = false;
         }
 
         if app.should_quit {

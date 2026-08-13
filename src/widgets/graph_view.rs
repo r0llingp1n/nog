@@ -60,7 +60,7 @@ impl<'a> GraphView<'a> {
                 }
             }
         }
-        for tag in &d.tags {
+        if let Some(tag) = d.tags.first() {
             return Some((tag.name.clone(), ratatui::style::Color::Yellow));
         }
 

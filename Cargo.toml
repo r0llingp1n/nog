@@ -10,4 +10,9 @@ git2 = "0.19"
 anyhow = "1"
 unicode-width = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+notify = { version = "7", default-features = false }
+
+# macos_fsevent is a macOS-only backend; enabling it everywhere breaks
+# other platforms. Linux uses the default inotify backend.
+[target.'cfg(target_os = "macos")'.dependencies]
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
