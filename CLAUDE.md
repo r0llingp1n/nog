@@ -21,17 +21,32 @@ The project should be built in whatever language has the bests text ui (tui) sup
 - `src/app.rs` — Application state machine, key handling
 - `src/ui.rs` — Top-level layout (graph pane + quick view pane)
 - `src/theme.rs` — Color palette
-- `src/git/` — Git data layer (types, repo, log walking, diff)
+- `src/git/` — Git data layer (types, repo, log walking, diff, status, stash)
 - `src/graph/` — DAG layout algorithm, box-drawing glyphs
-- `src/widgets/` — Ratatui widgets (graph view, commit detail)
+- `src/widgets/` — Ratatui widgets (graph view, commit detail, commit window, stash view, branch picker)
+- `tests/` — Integration tests
 
 ## Build & Run
+
+The toolchain is pinned to Rust 1.93.1 by `rust-toolchain.toml` (rustup) and
+`.tool-versions` (asdf). Bump both together — they are read by different tools.
 
 ```bash
 cargo build           # debug build
 cargo run             # run in current git repo
 cargo run -- /path    # run against specific repo
 ```
+
+A Makefile wraps the common tasks. `make help` lists every target.
+
+```bash
+make install          # build --release and install to ~/bin (PREFIX/BINDIR override)
+make test             # run the test suite
+make fmt-check        # fail if sources are not formatted
+make lint             # clippy with warnings denied
+```
+
+`make fmt-check` and `make lint` must pass before a change is committed.
 
 ## Key Bindings
 

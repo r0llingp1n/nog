@@ -13,7 +13,10 @@ the view when commits, refs, or the index change.
 
 - Commit graph with box-drawing glyphs and per-branch coloring
 - Quick View panel showing full commit messages and unified diffs
+- Commit window for staging files and writing commit messages
+- Stash view for browsing, applying, popping, and dropping stashes
 - Branch picker with checkout (stashes uncommitted changes when needed)
+- Branch filter that hides everything not reachable from HEAD
 - Local and remote branch/tag decorations on the graph
 - Incremental search across commit hashes, summaries, authors, branches,
   and tags
@@ -21,32 +24,68 @@ the view when commits, refs, or the index change.
 - Handles repositories with up to 50,000 commits
 
 
-## Requirements
+## Getting Started
 
-- Rust 1.70 or later
+### Requirements
+
 - A Unix terminal with 256-color support
+- Rust 1.93.1, pinned by `rust-toolchain.toml`
 
+You do not need to install Rust by hand.  If you use `rustup`, the pinned
+toolchain is fetched automatically on the first build.  If you use `asdf`,
+`.tool-versions` records the same version:
 
-## Building
-
-```
-cargo build            # debug build
-cargo build --release  # optimized build
-```
-
-
-## Usage
-
-```
-cargo run              # open the current directory's repository
-cargo run -- /path     # open a specific repository
+```bash
+asdf plugin add rust https://github.com/asdf-community/asdf-rust.git
+asdf install
 ```
 
-Or, after building a release binary:
+Note that these two files are read by different tools and nothing keeps them
+in sync, so bump them together.
 
+### Install
+
+```bash
+git clone https://github.com/r0llingp1n/nog.git
+cd nog
+make install
 ```
-./target/release/nog          # current directory
-./target/release/nog /path    # specific repository
+
+`make install` builds an optimized binary and installs it to `~/bin`.  If that
+directory is not on your `PATH`, the install step says so.  Override the
+destination with `PREFIX` or `BINDIR`:
+
+```bash
+make install BINDIR=/usr/local/bin
+```
+
+`make uninstall` removes it again.
+
+### Run
+
+```bash
+nog                  # open the current directory's repository
+nog /path/to/repo    # open a specific repository
+nog --version        # print the version
+```
+
+To run without installing anything:
+
+```bash
+cargo run            # current directory
+cargo run -- /path   # specific repository
+```
+
+### Development
+
+```bash
+make help        # list every target
+make build       # debug build
+make release     # optimized build
+make test        # run the test suite
+make fmt         # format sources in place
+make fmt-check   # fail if sources are not formatted
+make lint        # clippy with warnings denied
 ```
 
 
@@ -98,9 +137,12 @@ src/
   app.rs           Application state, key handling
   ui.rs            Top-level layout (graph pane + quick view pane)
   theme.rs         Color palette
-  git/             Git data layer (types, repo access, log walking, diff)
+  git/             Git data layer (types, repo access, log walking, diff,
+                   status, stash)
   graph/           DAG layout algorithm, box-drawing glyphs
-  widgets/         Ratatui widgets (graph view, commit detail)
+  widgets/         Ratatui widgets (graph view, commit detail, commit
+                   window, stash view, branch picker)
+tests/             Integration tests
 ```
 
 ### Dependencies
