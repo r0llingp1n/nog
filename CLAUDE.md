@@ -25,11 +25,13 @@ The project should be built in whatever language has the bests text ui (tui) sup
 - `src/graph/` — DAG layout algorithm, box-drawing glyphs
 - `src/widgets/` — Ratatui widgets (graph view, commit detail, commit window, stash view, branch picker)
 - `tests/` — Integration tests
+- `scripts/` — Repo maintenance scripts (used by pre-commit and the Makefile)
 
 ## Build & Run
 
 The toolchain is pinned to Rust 1.93.1 by `rust-toolchain.toml` (rustup) and
 `.tool-versions` (asdf). Bump both together — they are read by different tools.
+`make check-versions` (also a pre-commit hook) fails if they drift apart.
 
 ```bash
 cargo build           # debug build
@@ -48,6 +50,10 @@ make lint             # clippy with warnings denied
 
 `make fmt-check` and `make lint` must pass before a change is committed.
 
+Run `make init-pre-commit-hooks` once after cloning to enforce this
+automatically; `make pre-commit-run-all-files` runs every hook against the
+whole tree.
+
 ## Key Bindings
 
 - `j/k` or `↑/↓` — Navigate commits
@@ -64,4 +70,3 @@ make lint             # clippy with warnings denied
 - `g/G` — Jump to first/last commit
 - `Ctrl+d/u` — Page down/up
 - `q/Esc` — Quit (or close Quick View)
-

@@ -79,14 +79,36 @@ cargo run -- /path   # specific repository
 ### Development
 
 ```bash
-make help        # list every target
-make build       # debug build
-make release     # optimized build
-make test        # run the test suite
-make fmt         # format sources in place
-make fmt-check   # fail if sources are not formatted
-make lint        # clippy with warnings denied
+make help            # list every target
+make build           # debug build
+make release         # optimized build
+make test            # run the test suite
+make fmt             # format sources in place
+make fmt-check       # fail if sources are not formatted
+make lint            # clippy with warnings denied
+make check-versions  # verify the two toolchain pins agree
 ```
+
+### Pre-commit hooks
+
+The repository ships a [pre-commit](https://pre-commit.com/) configuration.
+Install the hook once after cloning:
+
+```bash
+make init-pre-commit-hooks
+```
+
+Every `git commit` then checks formatting, runs clippy with warnings denied,
+tidies whitespace, and verifies that `rust-toolchain.toml` and
+`.tool-versions` still pin the same Rust version.  To run everything against
+the whole tree without committing:
+
+```bash
+make pre-commit-run-all-files
+```
+
+The toolchain check is also available on its own as `make check-versions`, or
+directly as `scripts/check-toolchain-versions.sh`.
 
 
 ## Key Bindings
@@ -143,6 +165,7 @@ src/
   widgets/         Ratatui widgets (graph view, commit detail, commit
                    window, stash view, branch picker)
 tests/             Integration tests
+scripts/           Repo maintenance scripts (pre-commit, Makefile)
 ```
 
 ### Dependencies

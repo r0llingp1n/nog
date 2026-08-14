@@ -1,6 +1,6 @@
 # nog Makefile
 
-.PHONY: all build check clean fmt fmt-check help install lint reinstall release run test uninstall
+.PHONY: all build check check-versions clean fmt fmt-check help init-pre-commit-hooks install lint pre-commit-run-all-files reinstall release run test uninstall
 
 # Variables
 BIN              := nog
@@ -51,6 +51,20 @@ fmt-check: ## Fail if sources are not formatted
 
 lint: ## Run clippy with warnings denied
 	cargo clippy --all-targets -- -D warnings
+
+check-versions: ## Verify rust-toolchain.toml and .tool-versions agree
+	./scripts/check-toolchain-versions.sh
+
+init-pre-commit-hooks: ## Install the pre-commit git hook
+	@command -v pre-commit >/dev/null 2>&1 || { \
+		echo "pre-commit not found. Install it with 'pipx install pre-commit'"; \
+		echo "or see https://pre-commit.com/#installation"; \
+		exit 1; }
+	pre-commit install
+	@echo "Hook installed. It runs on every 'git commit'."
+
+pre-commit-run-all-files: ## Run every pre-commit hook against all files
+	pre-commit run --all-files
 
 clean: ## Remove build artifacts
 	cargo clean
