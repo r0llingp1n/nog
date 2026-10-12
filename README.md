@@ -15,6 +15,7 @@ the view when commits, refs, or the index change.
 - Quick View panel showing full commit messages and unified diffs
 - Commit window for staging files and writing commit messages
 - Stash view for browsing, applying, popping, and dropping stashes
+- Sync with a remote (stash, fetch, pop) and a conflict view to resolve merges
 - Branch picker with checkout (stashes uncommitted changes when needed)
 - Branch filter that hides everything not reachable from HEAD
 - Local and remote branch/tag decorations on the graph
@@ -131,6 +132,8 @@ directly as `scripts/check-toolchain-versions.sh`.
 | Space             | Toggle Quick View    |
 | c                 | Open commit window   |
 | s                 | Open stash view      |
+| p                 | Sync (merge commit)  |
+| P                 | Sync (fast-forward)  |
 | r                 | Toggle remote refs   |
 | b                 | Open branch picker   |
 | B                 | Toggle branch filter |
@@ -150,6 +153,20 @@ directly as `scripts/check-toolchain-versions.sh`.
 |-------------------|----------------------|
 | q / Esc           | Quit (or close view) |
 
+### Sync
+
+`p` and `P` sync the current branch with its remote while keeping local
+changes.  Both stash uncommitted changes, run `git fetch --all --prune`, then
+pop the stash back onto the current branch:
+
+- `p` — apply the result as a two-parent merge commit.
+- `P` — apply it as a fast-forward.
+
+If the pop or merge leaves a conflict, Nog opens a conflict view listing the
+conflicted files.  Resolve them in your editor or the working tree, then press
+`r` to re-check, `c` to commit the resolution, or `Esc` to abort and restore
+the previous state.
+
 
 ## Architecture
 
@@ -160,10 +177,10 @@ src/
   ui.rs            Top-level layout (graph pane + quick view pane)
   theme.rs         Color palette
   git/             Git data layer (types, repo access, log walking, diff,
-                   status, stash)
+                   status, stash, sync, fetch)
   graph/           DAG layout algorithm, box-drawing glyphs
   widgets/         Ratatui widgets (graph view, commit detail, commit
-                   window, stash view, branch picker)
+                   window, stash view, branch picker, conflict view)
 tests/             Integration tests
 scripts/           Repo maintenance scripts (pre-commit, Makefile)
 ```
