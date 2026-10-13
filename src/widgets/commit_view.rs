@@ -85,6 +85,7 @@ impl CommitView<'_> {
                 FileStatusCode::Renamed => theme::STATUS_RENAMED,
                 FileStatusCode::Typechange => theme::STATUS_MODIFIED,
                 FileStatusCode::Untracked => theme::STATUS_UNTRACKED,
+                FileStatusCode::Conflicted => theme::STATUS_CONFLICTED,
             };
 
             let bg = if is_selected {

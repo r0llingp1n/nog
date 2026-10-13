@@ -16,6 +16,7 @@ pub struct BranchInfo {
 }
 use crate::git::stash::{self, StashEntry};
 use crate::git::status::{self, FileStatus};
+use crate::git::sync::{self, PullMode, SyncOutcome, SyncResult};
 use crate::git::types::{CommitInfo, Decorations};
 use crate::graph::layout;
 use crate::graph::types::GraphRow;
@@ -33,6 +34,7 @@ pub enum AppMode {
     Search,
     CommitView,
     StashView,
+    Conflict,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -48,6 +50,12 @@ pub enum StashViewFocus {
     StashList,
     FileList,
     DiffPreview,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum ConflictFocus {
+    Files,
+    Content,
 }
 
 #[allow(dead_code)]
@@ -114,6 +122,19 @@ pub struct App {
     pub search_matches: Vec<usize>,
     pub search_match_idx: Option<usize>,
     pub search_direction: SearchDirection,
+
+    // Conflict view state (after a sync left a merge conflict)
+    pub conflict_files: Vec<String>,
+    pub conflict_selected: usize,
+    pub conflict_focus: ConflictFocus,
+    pub conflict_content: Option<String>,
+    pub conflict_scroll: u16,
+    pub conflict_pre_merge_head: Option<Oid>,
+    pub conflict_stashed: bool,
+    pub conflict_error: Option<String>,
+
+    // Transient status message (graph view); cleared on the next keypress.
+    pub status_message: Option<String>,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -181,6 +202,15 @@ impl App {
             search_matches: Vec::new(),
             search_match_idx: None,
             search_direction: SearchDirection::Forward,
+            conflict_files: Vec::new(),
+            conflict_selected: 0,
+            conflict_focus: ConflictFocus::Files,
+            conflict_content: None,
+            conflict_scroll: 0,
+            conflict_pre_merge_head: None,
+            conflict_stashed: false,
+            conflict_error: None,
+            status_message: None,
         })
     }
 
@@ -211,10 +241,12 @@ impl App {
             AppMode::Search => self.handle_search_key(key),
             AppMode::CommitView => self.handle_commit_view_key(key),
             AppMode::StashView => self.handle_stash_view_key(key),
+            AppMode::Conflict => self.handle_conflict_key(key),
         }
     }
 
     fn handle_graph_key(&mut self, key: KeyEvent) {
+        self.status_message = None;
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
             KeyCode::Char('j') | KeyCode::Down => {
@@ -275,6 +307,12 @@ impl App {
             }
             KeyCode::Char('s') => {
                 self.open_stash_view();
+            }
+            KeyCode::Char('p') => {
+                self.begin_sync(PullMode::MergeCommit);
+            }
+            KeyCode::Char('P') => {
+                self.begin_sync(PullMode::FastForwardOnly);
             }
             _ => {}
         }
@@ -1240,6 +1278,174 @@ impl App {
                 }
                 self.load_stash_files();
             }
+        }
+    }
+
+    // --- Sync: p (merge commit) / P (fast-forward only) ---
+
+    /// Kick off a sync of the current branch against its upstream.
+    fn begin_sync(&mut self, mode: PullMode) {
+        let path = self.repo_internal_path.clone();
+        match sync::sync(&path, mode) {
+            Ok(outcome) => self.apply_sync_outcome(outcome),
+            Err(e) => self.status_message = Some(format!("Sync failed: {}", e)),
+        }
+    }
+
+    fn apply_sync_outcome(&mut self, outcome: SyncOutcome) {
+        match outcome.result {
+            SyncResult::Conflicted => {
+                self.conflict_files = outcome.conflicted_files;
+                self.conflict_selected = 0;
+                self.conflict_focus = ConflictFocus::Files;
+                self.conflict_content = None;
+                self.conflict_scroll = 0;
+                self.conflict_pre_merge_head = outcome.pre_merge_head;
+                self.conflict_stashed = outcome.stashed;
+                self.conflict_error = None;
+                self.status_message = None;
+                self.mode = AppMode::Conflict;
+            }
+            _ => {
+                self.status_message = Some(outcome.message);
+                self.refresh();
+            }
+        }
+    }
+
+    fn handle_conflict_key(&mut self, key: KeyEvent) {
+        if self.conflict_focus == ConflictFocus::Content {
+            self.handle_conflict_content_key(key);
+            return;
+        }
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc => self.abort_conflict(),
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.conflict_selected + 1 < self.conflict_files.len() {
+                    self.conflict_selected += 1;
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.conflict_selected = self.conflict_selected.saturating_sub(1);
+            }
+            KeyCode::Char('g') | KeyCode::Home => {
+                self.conflict_selected = 0;
+            }
+            KeyCode::Char('G') | KeyCode::End => {
+                if !self.conflict_files.is_empty() {
+                    self.conflict_selected = self.conflict_files.len() - 1;
+                }
+            }
+            KeyCode::Char(' ') | KeyCode::Enter => self.open_conflict_content(),
+            KeyCode::Char('c') => self.finalize_conflict(),
+            KeyCode::Char('r') => self.recheck_conflicts(),
+            _ => {}
+        }
+    }
+
+    fn handle_conflict_content_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => self.conflict_focus = ConflictFocus::Files,
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.conflict_scroll = self.conflict_scroll.saturating_add(1);
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.conflict_scroll = self.conflict_scroll.saturating_sub(1);
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.conflict_scroll = self.conflict_scroll.saturating_add(20);
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.conflict_scroll = self.conflict_scroll.saturating_sub(20);
+            }
+            KeyCode::Char('g') | KeyCode::Home => self.conflict_scroll = 0,
+            _ => {}
+        }
+    }
+
+    fn open_conflict_content(&mut self) {
+        let rel = match self.conflict_files.get(self.conflict_selected) {
+            Some(p) => p.clone(),
+            None => return,
+        };
+        let content = (|| -> Result<String> {
+            let repo = git2::Repository::open(&self.repo_internal_path)?;
+            let workdir = repo
+                .workdir()
+                .ok_or_else(|| anyhow::anyhow!("no workdir"))?;
+            Ok(std::fs::read_to_string(workdir.join(&rel))?)
+        })()
+        .unwrap_or_else(|e| format!("(cannot read {}): {}", rel, e));
+        self.conflict_content = Some(content);
+        self.conflict_scroll = 0;
+        self.conflict_focus = ConflictFocus::Content;
+    }
+
+    fn finalize_conflict(&mut self) {
+        let Some(pre_merge_head) = self.conflict_pre_merge_head else {
+            self.conflict_error = Some("No in-progress merge to finalize".to_string());
+            return;
+        };
+        let stashed = self.conflict_stashed;
+        let path = self.repo_internal_path.clone();
+        match sync::finalize_merge(&path, pre_merge_head, stashed) {
+            Ok(outcome) => {
+                self.conflict_pre_merge_head = None;
+                self.conflict_stashed = false;
+                self.conflict_error = None;
+                self.status_message = Some(outcome.message);
+                self.mode = AppMode::GraphView;
+                self.refresh();
+            }
+            Err(e) => self.conflict_error = Some(format!("Finalize failed: {}", e)),
+        }
+    }
+
+    fn abort_conflict(&mut self) {
+        let Some(pre_merge_head) = self.conflict_pre_merge_head else {
+            self.mode = AppMode::GraphView;
+            return;
+        };
+        let stashed = self.conflict_stashed;
+        let path = self.repo_internal_path.clone();
+        match sync::abort_merge(&path, pre_merge_head, stashed) {
+            Ok(outcome) => {
+                self.conflict_pre_merge_head = None;
+                self.conflict_stashed = false;
+                self.conflict_error = None;
+                self.status_message = Some(outcome.message);
+                self.mode = AppMode::GraphView;
+                self.refresh();
+            }
+            Err(e) => self.conflict_error = Some(format!("Abort failed: {}", e)),
+        }
+    }
+
+    fn recheck_conflicts(&mut self) {
+        let path = self.repo_internal_path.clone();
+        let repo = match git2::Repository::open(&path) {
+            Ok(r) => r,
+            Err(e) => {
+                self.conflict_error = Some(format!("Re-check failed: {}", e));
+                return;
+            }
+        };
+        match status::unmerged_files(&repo) {
+            Ok(files) => {
+                self.conflict_files = files;
+                if self.conflict_files.is_empty() {
+                    self.conflict_error = None;
+                    self.status_message =
+                        Some("Conflicts resolved; press 'c' to finalize the merge".to_string());
+                }
+                if !self.conflict_files.is_empty() {
+                    self.conflict_selected =
+                        self.conflict_selected.min(self.conflict_files.len() - 1);
+                } else {
+                    self.conflict_selected = 0;
+                }
+            }
+            Err(e) => self.conflict_error = Some(format!("Re-check failed: {}", e)),
         }
     }
 

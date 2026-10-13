@@ -21,9 +21,9 @@ The project should be built in whatever language has the bests text ui (tui) sup
 - `src/app.rs` — Application state machine, key handling
 - `src/ui.rs` — Top-level layout (graph pane + quick view pane)
 - `src/theme.rs` — Color palette
-- `src/git/` — Git data layer (types, repo, log walking, diff, status, stash)
+- `src/git/` — Git data layer (types, repo, log walking, diff, status, stash, sync, fetch)
 - `src/graph/` — DAG layout algorithm, box-drawing glyphs
-- `src/widgets/` — Ratatui widgets (graph view, commit detail, commit window, stash view, branch picker)
+- `src/widgets/` — Ratatui widgets (graph view, commit detail, commit window, stash view, branch picker, conflict view)
 - `tests/` — Integration tests
 - `scripts/` — Repo maintenance scripts (used by pre-commit and the Makefile)
 
@@ -64,6 +64,8 @@ whole tree.
 - `N` — Previous match
 - `c` — Open commit window (stage/unstage files, write message, commit)
 - `s` — Open stash view (browse stash stack, view files, apply/pop/drop)
+- `p` — Sync with remote as a merge commit (stash, fetch --all --prune, pop)
+- `P` — Sync with remote as a fast-forward (stash, fetch --all --prune, pop)
 - `b` — Open branch picker (Enter to checkout, Esc to cancel)
 - `B` — Toggle branch filter (show only commits reachable from HEAD)
 - `r` — Toggle remote branch tips

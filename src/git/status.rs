@@ -15,6 +15,7 @@ pub enum FileStatusCode {
     Renamed,
     Typechange,
     Untracked,
+    Conflicted,
 }
 
 impl FileStatusCode {
@@ -26,6 +27,7 @@ impl FileStatusCode {
             FileStatusCode::Renamed => "R",
             FileStatusCode::Typechange => "T",
             FileStatusCode::Untracked => "?",
+            FileStatusCode::Conflicted => "U",
         }
     }
 }
@@ -45,6 +47,14 @@ pub fn get_status(repo: &Repository) -> Result<(Vec<FileStatus>, Vec<FileStatus>
     for entry in statuses.iter() {
         let path = entry.path().unwrap_or("").to_string();
         let st = entry.status();
+        // Unmerged (conflicted) files take precedence over other states.
+        if st.contains(Status::CONFLICTED) {
+            staged.push(FileStatus {
+                path,
+                status_code: FileStatusCode::Conflicted,
+            });
+            continue;
+        }
 
         // Index (staged) changes
         if st.intersects(
@@ -194,4 +204,32 @@ pub fn create_commit(repo: &Repository, message: &str) -> Result<()> {
         repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[])?;
     }
     Ok(())
+}
+
+/// Return the paths of files with unmerged (conflicted) index/worktree state.
+pub fn unmerged_files(repo: &Repository) -> Result<Vec<String>> {
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true).recurse_untracked_dirs(true);
+
+    let statuses = repo.statuses(Some(&mut opts))?;
+    let mut files: Vec<String> = statuses
+        .iter()
+        .filter(|entry| entry.status().contains(Status::CONFLICTED))
+        .map(|entry| entry.path().unwrap_or("").to_string())
+        .collect();
+    files.sort();
+    Ok(files)
+}
+
+/// Whether the working tree has tracked changes worth stashing.
+///
+/// Untracked files are ignored, matching `git stash` without `-u`.
+pub fn has_tracked_changes(repo: &Repository) -> Result<bool> {
+    let (unstaged, staged) = get_status(repo)?;
+    if !staged.is_empty() {
+        return Ok(true);
+    }
+    Ok(unstaged
+        .iter()
+        .any(|f| f.status_code != FileStatusCode::Untracked))
 }

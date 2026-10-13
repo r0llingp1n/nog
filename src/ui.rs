@@ -9,6 +9,7 @@ use crate::git::diff::DiffData;
 use crate::widgets::branch_picker::BranchPicker;
 use crate::widgets::commit_detail::CommitDetail;
 use crate::widgets::commit_view::CommitView;
+use crate::widgets::conflict_view::ConflictView;
 use crate::widgets::graph_view::GraphView;
 use crate::widgets::stash_prompt::StashPrompt;
 use crate::widgets::stash_view::StashView;
@@ -123,6 +124,17 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             };
             frame.render_widget(stash_view, main_area);
         }
+        AppMode::Conflict => {
+            let conflict_view = ConflictView {
+                files: &app.conflict_files,
+                selected: app.conflict_selected,
+                focus: app.conflict_focus,
+                content: app.conflict_content.as_deref(),
+                scroll: app.conflict_scroll,
+                error: app.conflict_error.as_deref(),
+            };
+            frame.render_widget(conflict_view, main_area);
+        }
     }
 
     // Bottom bar
@@ -230,12 +242,28 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             base.fg(Color::Rgb(210, 210, 130)),
         ));
     }
+    // Transient status message (e.g. after a sync)
+    if let Some(msg) = app.status_message.as_deref() {
+        spans.push(Span::styled(
+            format!("  {}  ", msg),
+            base.fg(Color::Rgb(210, 210, 130)),
+        ));
+    }
 
     spans.push(Span::styled("  ", base));
 
     // Key hints
     let hints: &[(&str, &str)] = match app.mode {
-        AppMode::GraphView | AppMode::BranchPicker | AppMode::StashPrompt | AppMode::Search => &[
+        AppMode::GraphView => &[
+            ("p", "merge"),
+            ("P", "ff-only"),
+            ("c", "commit"),
+            ("s", "stash"),
+            ("/", "search"),
+            ("b", "branch"),
+            ("q", "quit"),
+        ],
+        AppMode::BranchPicker | AppMode::StashPrompt | AppMode::Search => &[
             ("c", "commit"),
             ("s", "stash"),
             ("/", "search"),
@@ -258,6 +286,12 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("d", "drop"),
             ("Space", "files/diff"),
             ("Esc", "back"),
+        ],
+        AppMode::Conflict => &[
+            ("Space", "view"),
+            ("r", "re-check"),
+            ("c", "commit"),
+            ("Esc", "abort"),
         ],
     };
 

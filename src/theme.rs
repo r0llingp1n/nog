@@ -26,6 +26,7 @@ pub const STATUS_ADDED: Color = Color::Green;
 pub const STATUS_DELETED: Color = Color::Red;
 pub const STATUS_UNTRACKED: Color = Color::Cyan;
 pub const STATUS_RENAMED: Color = Color::Magenta;
+pub const STATUS_CONFLICTED: Color = Color::LightRed;
 pub const FOCUS_BORDER: Color = Color::Cyan;
 pub const UNFOCUS_BORDER: Color = Color::DarkGray;
 
