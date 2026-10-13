@@ -125,7 +125,9 @@ pub fn sync(repo_path: &Path, mode: PullMode) -> Result<SyncOutcome> {
     // the stash so a failed sync never strands the user's work.
     let result = (|| -> Result<SyncOutcome> {
         fetch::fetch_all_prune(&repo)?;
-
+        // The fetch ran in a subprocess and wrote refs/objects to disk; reopen
+        // so the in-memory repo sees the freshly-fetched upstream.
+        let mut repo = Repository::open(repo_path)?;
         let upstream = match resolve_upstream(&repo, &branch)? {
             Some(oid) => oid,
             None => {
@@ -187,7 +189,7 @@ fn sync_fast_forward(
         return Ok(SyncOutcome {
             result: SyncResult::Diverged,
             message: format!(
-                "'{}' has diverged from its upstream; press 'p' for a merge commit",
+                "'{}' has diverged from its upstream; press 'p' to pull",
                 branch
             ),
             pre_merge_head: None,

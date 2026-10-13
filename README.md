@@ -132,8 +132,8 @@ directly as `scripts/check-toolchain-versions.sh`.
 | Space             | Toggle Quick View    |
 | c                 | Open commit window   |
 | s                 | Open stash view      |
-| p                 | Sync (merge commit)  |
-| P                 | Sync (fast-forward)  |
+| p                 | Pull                 |
+| P                 | Pull (fast-forward)  |
 | r                 | Toggle remote refs   |
 | b                 | Open branch picker   |
 | B                 | Toggle branch filter |
@@ -159,8 +159,8 @@ directly as `scripts/check-toolchain-versions.sh`.
 changes.  Both stash uncommitted changes, run `git fetch --all --prune`, then
 pop the stash back onto the current branch:
 
-- `p` — apply the result as a two-parent merge commit.
-- `P` — apply it as a fast-forward.
+- `p` — pull with a two-parent merge commit when the branch has diverged.
+- `P` — pull as a fast-forward only.
 
 If the pop or merge leaves a conflict, Nog opens a conflict view listing the
 conflicted files.  Resolve them in your editor or the working tree, then press
