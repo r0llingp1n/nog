@@ -309,10 +309,10 @@ impl App {
                 self.open_stash_view();
             }
             KeyCode::Char('p') => {
-                self.begin_sync(PullMode::MergeCommit);
+                self.begin_sync(PullMode::FastForwardOnly);
             }
             KeyCode::Char('P') => {
-                self.begin_sync(PullMode::FastForwardOnly);
+                self.begin_sync(PullMode::MergeCommit);
             }
             _ => {}
         }
