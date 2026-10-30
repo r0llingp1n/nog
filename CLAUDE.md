@@ -64,8 +64,8 @@ whole tree.
 - `N` — Previous match
 - `c` — Open commit window (stage/unstage files, write message, commit)
 - `s` — Open stash view (browse stash stack, view files, apply/pop/drop)
-- `p` — Pull from remote as a merge commit (stash, fetch --all --prune, pop)
-- `P` — Pull from remote as a fast-forward (stash, fetch --all --prune, pop)
+- `p` — Pull from remote as a fast-forward (stash, fetch --all --prune, pop)
+- `P` — Pull from remote as a merge commit (stash, fetch --all --prune, pop)
 - `b` — Open branch picker (Enter to checkout, Esc to cancel)
 - `B` — Toggle branch filter (show only commits reachable from HEAD)
 - `r` — Toggle remote branch tips
