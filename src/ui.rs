@@ -255,8 +255,8 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     // Key hints
     let hints: &[(&str, &str)] = match app.mode {
         AppMode::GraphView => &[
-            ("p", "pull"),
-            ("P", "pull-ff"),
+            ("p", "pull-ff"),
+            ("P", "pull"),
             ("c", "commit"),
             ("s", "stash"),
             ("/", "search"),
