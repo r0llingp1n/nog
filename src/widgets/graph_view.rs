@@ -279,7 +279,21 @@ impl<'a> GraphView<'a> {
                     glyphs::VERTICAL.to_string(),
                     Style::default().fg(theme::graph_color(color)),
                 ));
-                spans.push(Span::raw(" ".to_string()));
+                // Continue the horizontal connector toward the commit column
+                // when the junction line still runs past this column.
+                let continues = merge_min.is_some() && merge_max.is_some() && {
+                    let lo = graph_row.commit_col.min(merge_min.unwrap());
+                    let hi = graph_row.commit_col.max(merge_max.unwrap());
+                    col >= lo && col < hi
+                };
+                if continues {
+                    spans.push(Span::styled(
+                        "─".to_string(),
+                        Style::default().fg(theme::graph_color(graph_row.commit_color)),
+                    ));
+                } else {
+                    spans.push(Span::raw(" ".to_string()));
+                }
             } else if let Some(Some(color_idx)) = graph_row.active_cols.get(col) {
                 spans.push(Span::styled(
                     glyphs::VERTICAL.to_string(),
