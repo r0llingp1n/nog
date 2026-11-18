@@ -25,9 +25,18 @@ pub struct TagInfo {
     pub name: String,
 }
 
+/// A live worktree checkout. `name` is the worktree's location (a path
+/// relative to the main worktree's parent directory, or its directory name),
+/// shown on the commit the worktree is checked out on.
+#[derive(Debug, Clone)]
+pub struct WorktreeInfo {
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Decorations {
     pub branches: Vec<BranchInfo>,
     pub tags: Vec<TagInfo>,
+    pub worktrees: Vec<WorktreeInfo>,
     pub is_head: bool,
 }

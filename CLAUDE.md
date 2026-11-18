@@ -68,6 +68,7 @@ whole tree.
 - `P` — Pull from remote as a merge commit (stash, fetch --all --prune, pop)
 - `b` — Open branch picker (Enter to checkout, Esc to cancel)
 - `B` — Toggle branch filter (show only commits reachable from HEAD)
+- `w` — Toggle worktree checkouts in the graph
 - `r` — Toggle remote branch tips
 - `g/G` — Jump to first/last commit
 - `Ctrl+d/u` — Page down/up
