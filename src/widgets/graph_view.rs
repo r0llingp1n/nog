@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 /// Color for worktree labels: distinct from branches/HEAD (green), remotes
 /// (red), and tags (yellow).
-const WORKTREE_LABEL_COLOR: ratatui::style::Color = ratatui::style::Color::Cyan;
+const WORKTREE_LABEL_COLOR: ratatui::style::Color = ratatui::style::Color::Blue;
 
 pub struct GraphViewState {
     pub selected: usize,
