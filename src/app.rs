@@ -81,6 +81,8 @@ pub struct App {
     pub show_remotes: bool,
     /// When true, show only commits reachable from HEAD.
     pub branch_filter: bool,
+    /// When true, show worktree checkouts in the commit DAG.
+    pub show_worktrees: bool,
 
     // Branch picker state
     pub branches: Vec<BranchInfo>,
@@ -171,6 +173,7 @@ impl App {
             branch_name,
             show_remotes: false,
             branch_filter: false,
+            show_worktrees: false,
             branches: Vec::new(),
             branch_selected: 0,
             branch_error: None,
@@ -282,6 +285,9 @@ impl App {
             KeyCode::Char('B') => {
                 self.branch_filter = !self.branch_filter;
                 self.refresh();
+            }
+            KeyCode::Char('w') => {
+                self.show_worktrees = !self.show_worktrees;
             }
             KeyCode::Char('b') => {
                 self.open_branch_picker();

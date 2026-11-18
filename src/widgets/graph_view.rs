@@ -13,6 +13,10 @@ use crate::theme;
 use git2::Oid;
 use std::collections::HashMap;
 
+/// Color for worktree labels: distinct from branches/HEAD (green), remotes
+/// (red), and tags (yellow).
+const WORKTREE_LABEL_COLOR: ratatui::style::Color = ratatui::style::Color::Blue;
+
 pub struct GraphViewState {
     pub selected: usize,
     pub offset: usize,
@@ -32,6 +36,7 @@ pub struct GraphView<'a> {
     pub graph_rows: &'a [GraphRow],
     pub decorations: &'a HashMap<Oid, Decorations>,
     pub show_remotes: bool,
+    pub show_worktrees: bool,
 }
 
 impl<'a> GraphView<'a> {
@@ -62,6 +67,11 @@ impl<'a> GraphView<'a> {
         }
         if let Some(tag) = d.tags.first() {
             return Some((tag.name.clone(), ratatui::style::Color::Yellow));
+        }
+        if self.show_worktrees {
+            if let Some(wt) = d.worktrees.first() {
+                return Some((wt.name.clone(), WORKTREE_LABEL_COLOR));
+            }
         }
 
         None
@@ -116,6 +126,15 @@ impl<'a> GraphView<'a> {
                 continue;
             }
             labels.push((tag.name.clone(), ratatui::style::Color::Yellow));
+        }
+        if self.show_worktrees {
+            for wt in &d.worktrees {
+                if !first_skipped {
+                    first_skipped = true;
+                    continue;
+                }
+                labels.push((wt.name.clone(), WORKTREE_LABEL_COLOR));
+            }
         }
 
         labels

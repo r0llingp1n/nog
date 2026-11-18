@@ -46,6 +46,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 graph_rows: &app.graph_rows,
                 decorations: &app.decorations,
                 show_remotes: app.show_remotes,
+                show_worktrees: app.show_worktrees,
             };
             frame.render_stateful_widget(graph, main_area, &mut app.graph_state);
 
@@ -78,6 +79,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 graph_rows: &app.graph_rows,
                 decorations: &app.decorations,
                 show_remotes: app.show_remotes,
+                show_worktrees: app.show_worktrees,
             };
             frame.render_stateful_widget(graph, chunks[0], &mut app.graph_state);
 
@@ -228,6 +230,14 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled(" branch", base.fg(Color::Rgb(130, 190, 210))));
     }
 
+    // Worktrees indicator
+    if app.show_worktrees {
+        spans.push(Span::styled(
+            " worktrees",
+            base.fg(Color::Rgb(130, 210, 210)),
+        ));
+    }
+
     // Active search indicator
     if app.search_pattern.is_some() && !app.search_matches.is_empty() {
         let idx = app.search_match_idx.map(|i| i + 1).unwrap_or(0);
@@ -261,6 +271,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             ("s", "stash"),
             ("/", "search"),
             ("b", "branch"),
+            ("w", "worktrees"),
             ("q", "quit"),
         ],
         AppMode::BranchPicker | AppMode::StashPrompt | AppMode::Search => &[
