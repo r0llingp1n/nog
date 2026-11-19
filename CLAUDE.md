@@ -66,6 +66,8 @@ whole tree.
 - `s` — Open stash view (browse stash stack, view files, apply/pop/drop)
 - `p` — Pull from remote as a fast-forward (stash, fetch --all --prune, pop)
 - `P` — Pull from remote as a merge commit (stash, fetch --all --prune, pop)
+- `f` — Fetch all remotes with pruning (`git fetch --all --prune`)
+- `F` — Fetch all remotes (`git fetch --all`)
 - `b` — Open branch picker (Enter to checkout, Esc to cancel)
 - `B` — Toggle branch filter (show only commits reachable from HEAD)
 - `w` — Toggle worktree checkouts in the graph

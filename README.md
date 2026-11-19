@@ -134,6 +134,8 @@ directly as `scripts/check-toolchain-versions.sh`.
 | s                 | Open stash view      |
 | p                 | Pull                 |
 | P                 | Pull (fast-forward)  |
+| f                 | Fetch (prune)        |
+| F                 | Fetch (no prune)     |
 | r                 | Toggle remote refs   |
 | b                 | Open branch picker   |
 | B                 | Toggle branch filter |
@@ -166,6 +168,19 @@ If the pop or merge leaves a conflict, Nog opens a conflict view listing the
 conflicted files.  Resolve them in your editor or the working tree, then press
 `r` to re-check, `c` to commit the resolution, or `Esc` to abort and restore
 the previous state.
+
+
+## Fetch
+
+`f` and `F` fetch from the remotes without touching the working tree, so they
+are safe to run with uncommitted changes:
+
+- `f` — `git fetch --all --prune`, which also drops remote-tracking branches that
+  no longer exist on the remote.
+- `F` — `git fetch --all`, keeping every remote-tracking branch.
+
+After a fetch the graph and decorations are reloaded so newly fetched branches
+appear immediately.
 
 
 ## Architecture

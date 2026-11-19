@@ -6,6 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Oid;
 
 use crate::git::diff::{self, DiffData};
+use crate::git::fetch;
 use crate::git::log::{self, WalkScope};
 use crate::git::repo;
 
@@ -319,6 +320,12 @@ impl App {
             }
             KeyCode::Char('P') => {
                 self.begin_sync(PullMode::MergeCommit);
+            }
+            KeyCode::Char('f') => {
+                self.begin_fetch(true);
+            }
+            KeyCode::Char('F') => {
+                self.begin_fetch(false);
             }
             _ => {}
         }
@@ -1295,6 +1302,31 @@ impl App {
         match sync::sync(&path, mode) {
             Ok(outcome) => self.apply_sync_outcome(outcome),
             Err(e) => self.status_message = Some(format!("Sync failed: {}", e)),
+        }
+    }
+
+    /// Fetch every remote (see [`crate::git::fetch::fetch_all`]). `prune`
+    /// adds `--prune` to drop stale remote-tracking branches.
+    fn begin_fetch(&mut self, prune: bool) {
+        let repo = match git2::Repository::open(&self.repo_internal_path) {
+            Ok(repo) => repo,
+            Err(e) => {
+                self.status_message = Some(format!("Fetch failed: {}", e));
+                return;
+            }
+        };
+        match fetch::fetch_all(&repo, prune) {
+            Ok(()) => {
+                self.status_message = Some(if prune {
+                    "Fetched all remotes (pruned)".to_string()
+                } else {
+                    "Fetched all remotes".to_string()
+                });
+                // The fetch wrote refs/objects to disk in a subprocess; refresh
+                // so the graph and decorations reflect the newly fetched state.
+                self.refresh();
+            }
+            Err(e) => self.status_message = Some(format!("Fetch failed: {}", e)),
         }
     }
 
