@@ -124,7 +124,7 @@ pub fn sync(repo_path: &Path, mode: PullMode) -> Result<SyncOutcome> {
     // 2. Fetch + reconcile. On any error after stashing, best-effort restore
     // the stash so a failed sync never strands the user's work.
     let result = (|| -> Result<SyncOutcome> {
-        fetch::fetch_all_prune(&repo)?;
+        fetch::fetch_all(&repo, true)?;
         // The fetch ran in a subprocess and wrote refs/objects to disk; reopen
         // so the in-memory repo sees the freshly-fetched upstream.
         let mut repo = Repository::open(repo_path)?;
