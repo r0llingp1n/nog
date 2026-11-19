@@ -1305,11 +1305,10 @@ impl App {
         }
     }
 
-    /// Fetch every remote. `prune` drops stale remote-tracking branches
-    /// (`git fetch --all --prune`); otherwise they are kept (`git fetch --all`).
+    /// Fetch every remote (see [`crate::git::fetch::fetch_all`]). `prune`
+    /// adds `--prune` to drop stale remote-tracking branches.
     fn begin_fetch(&mut self, prune: bool) {
-        let path = self.repo_internal_path.clone();
-        let repo = match git2::Repository::open(&path) {
+        let repo = match git2::Repository::open(&self.repo_internal_path) {
             Ok(repo) => repo,
             Err(e) => {
                 self.status_message = Some(format!("Fetch failed: {}", e));
