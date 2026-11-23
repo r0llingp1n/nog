@@ -267,7 +267,8 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         AppMode::GraphView => &[
             ("p", "pull-ff"),
             ("P", "pull"),
-            ("f/F", "fetch"),
+            ("f", "fetch-prune"),
+            ("F", "fetch"),
             ("c", "commit"),
             ("s", "stash"),
             ("/", "search"),
